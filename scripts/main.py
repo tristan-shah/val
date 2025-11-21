@@ -1,22 +1,21 @@
+from copy import deepcopy
+from typing import Optional
+
 import jax
 from jax import Array
 from jax import numpy as jnp
-import matplotlib.pyplot as plt
 from flax import nnx
+import flashbax as fbx
+from flashbax.buffers.flat_buffer import TransitionSample
+import chex
+import optax
 
 from val import Dynamics
 
-@jax.jit
-def normalize_pendulum_state(xt: Array, max_vel: float = 3 * jnp.pi):
-    '''
-    Takes the raw mujoco state and normalizes angles and velocities.
-    '''
-    return jnp.stack([jnp.cos(xt[0]), jnp.sin(xt[0]), xt[1] / max_vel])
-
-def build_pendulum_critic(h_dim: int, rngs: nnx.Rngs):
+def build_pendulum_critic(state_dim: int, act_dim:int, h_dim: int, rngs: nnx.Rngs):
 
     critic = nnx.Sequential(
-        nnx.Linear(4, h_dim, rngs = rngs),
+        nnx.Linear(state_dim + act_dim, h_dim, rngs = rngs),
         nnx.gelu,
         nnx.Linear(h_dim, h_dim, rngs = rngs),
         nnx.gelu,
@@ -27,35 +26,224 @@ def build_pendulum_critic(h_dim: int, rngs: nnx.Rngs):
 
     return critic
 
-def build_pendulum_policy(h_dim: int, rngs: nnx.Rngs):
+def build_pendulum_policy(state_dim: int, act_dim:int, h_dim: int, rngs: nnx.Rngs):
 
     policy = nnx.Sequential(
-        nnx.Linear(3, h_dim, rngs = rngs),
+        nnx.Linear(state_dim, h_dim, rngs = rngs),
         nnx.gelu,
         nnx.Linear(h_dim, h_dim, rngs = rngs),
         nnx.gelu,
-        nnx.Linear(h_dim, 1, rngs = rngs)
+        nnx.Linear(h_dim, act_dim, rngs = rngs),
+        nnx.tanh
     )
 
     return policy
+
+@nnx.jit
+def soft_update(model, target_model, tau=0.005):
+    new_state = jax.tree_util.tree_map(
+        lambda p, tp: tau * p + (1 - tau) * tp,
+        nnx.state(model),
+        nnx.state(target_model)
+    )
+
+    nnx.update(target_model, new_state)
+    return target_model
+
+@jax.jit
+def init_pendulum_state(key):
+    xt = jax.random.uniform(key, shape = 2) * 2 - 1
+    xt = xt * jnp.array([jnp.pi, 3 * jnp.pi])
+    return xt
+
+@jax.jit
+def normalize_pendulum_state(xt: Array, max_vel: float = 3 * jnp.pi):
+    '''
+    Takes the raw mujoco state and normalizes angles and velocities.
+    '''
+    return jnp.stack([jnp.cos(xt[0]), jnp.sin(xt[0]), xt[1] / max_vel])
+
+@jax.jit
+def pendulum_reward(xt: Array, ut: Array):
+    return jnp.cos(xt[0]) - 0.1 * ut ** 2
+
+@chex.dataclass(frozen = True)
+class SART:
+    s: chex.Array
+    a: chex.Array
+    r: chex.Array
+    t: chex.Array
+
+@nnx.jit
+def update_critic(critic, target_critic, target_policy, critic_opt, experience: TransitionSample):
+
+    ## extract experience
+    x = experience.first.s
+    u = experience.first.a
+    r = experience.first.r
+    t = experience.first.t
+    x_ = experience.second.s
+
+    def loss_fn(critic):
+
+        ## normalize states
+        z = jax.vmap(normalize_pendulum_state)(x)
+        z_ = jax.vmap(normalize_pendulum_state)(x_)
+        ## compute action in next state
+        u_ = target_policy(z_)
+
+        ## compute values
+        q = critic(jnp.concatenate([z, u], axis = -1))
+        q_ = target_critic(jnp.concatenate([z_, u_], axis = -1))
+
+        ## compute Bellman TD target
+        y = r + (1.0 - t) * gamma * q_
+        return jnp.mean(jnp.square(q - y))
     
+    loss, grads = nnx.value_and_grad(loss_fn)(critic)
+    critic_opt.update(grads)
+
+    return loss
+
+@nnx.jit
+def update_policy(critic, policy, policy_opt, experience: TransitionSample):
+
+    ## extract experience
+    x = experience.first.s
+
+    def loss_fn(policy):
+         ## normalize states
+        z = jax.vmap(normalize_pendulum_state)(x)
+
+        q = critic(jnp.concatenate([z, policy(z)], axis = -1))
+
+        return - jnp.mean(q)
+    
+    loss, grads = nnx.value_and_grad(loss_fn)(policy)
+    policy_opt.update(grads)
+
+    return loss
 
 if __name__ == '__main__':
-    key = jax.random.PRNGKey(0)
+    ## hyperparameters
+    seed = 105
+    key = jax.random.PRNGKey(seed)
+    rngs = nnx.Rngs(seed)
+
+    buffer_len = 10_000
+    num_episodes = 100
+    episode_len = 200
+    gamma = 0.99
+    batch_size = 64
+    exploration_noise = 0.2
+    tau = 0.005
+    h_dim = 128
+
+    critic_lr = 1e-3
+    policy_lr = 1e-4
+
+    ## instantiating the buffer
+    buffer = fbx.make_flat_buffer(
+        max_length = buffer_len,
+        min_length = batch_size,
+        sample_batch_size = batch_size,
+    )
+
+    ## jit compiling buffer functions
+    buffer = buffer.replace(
+        init = jax.jit(buffer.init),
+        add = jax.jit(buffer.add, donate_argnums = 0),
+        sample = jax.jit(buffer.sample),
+        can_sample = jax.jit(buffer.can_sample),
+    )
 
     ## load in xml
     xml_path = 'xml/pendulum.xml'
     dyn = Dynamics(path = xml_path)
+    low = dyn.mjx_model.actuator_ctrlrange[:, 0]
+    high = dyn.mjx_model.actuator_ctrlrange[:, 1]
+    
+    ## build networks
+    critic = build_pendulum_critic(3, dyn.control_dim, h_dim, rngs)
+    policy = build_pendulum_policy(3, dyn.control_dim, h_dim, rngs)
+    target_critic = deepcopy(critic)
+    target_policy = deepcopy(policy)
 
-    ## network parameters
-    rngs = nnx.Rngs(0)
-    h_dim = 128
+    critic_opt = nnx.Optimizer(critic, optax.adam(critic_lr))
+    policy_opt = nnx.Optimizer(policy, optax.adam(policy_lr))
 
-    critic = build_pendulum_critic(h_dim, rngs)
-    policy = build_pendulum_policy(h_dim, rngs)
+    ## create dummy transition
+    sart = SART(
+        s = jnp.zeros(dyn.state_dim), 
+        a = jnp.zeros(dyn.control_dim),
+        r = jnp.zeros(1),
+        t = jnp.zeros(1, dtype = bool)
+    )
 
-    xt = jnp.zeros(2)
-    xt = xt.at[0].set(3.1)
+    ## initialize replay buffer with dummy transition
+    buffer_state = buffer.init(sart)
 
-    print(xt)
-    print(normalize_pendulum_state(xt))
+    critic_loss_hist = []
+    policy_loss_hist = []
+    reward_hist = []
+
+    for episode in range(num_episodes):
+        key, subkey = jax.random.split(key)
+
+        ## initialize state
+        x = init_pendulum_state(subkey)
+        done = jnp.bool(0)
+        total_reward = 0.0
+
+        ## run an episode
+        for i in range(episode_len):
+            key, subkey = jax.random.split(key)
+
+            ## normalize the state (for networks)
+            z = normalize_pendulum_state(x)
+            
+            ## compute a random action
+            u = policy(z)
+            u = u + exploration_noise * jax.random.normal(subkey, shape = u.shape)
+            u = jnp.clip(u, low, high)
+
+            ## step the dynamics
+            x_next = dyn.step(x, u)
+
+            ## compute the reward
+            r = pendulum_reward(x, u)
+            total_reward += r
+
+            ## check if episode is done
+            done = jnp.bool(i == episode_len - 1)
+
+            ## store transition
+            sart = SART(s = x,  a = u, r = r, t = done)
+
+            buffer_state = buffer.add(buffer_state, sart)
+            ## overwrite previous state
+            x = x_next
+
+            if buffer.can_sample(buffer_state):
+
+                data = buffer.sample(buffer_state, subkey)
+                critic_loss = update_critic(critic, target_critic, target_policy, critic_opt, data.experience)
+                policy_loss = update_policy(critic, policy, policy_opt, data.experience)
+
+                target_critic = soft_update(critic, target_critic, tau)
+                target_policy = soft_update(policy, target_policy, tau)
+
+                critic_loss_hist.append(critic_loss)
+                policy_loss_hist.append(policy_loss)
+        
+        reward_hist.append(total_reward)
+
+        print(total_reward)
+
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(1, 3)
+    ax[0].plot(critic_loss_hist)
+    ax[1].plot(policy_loss_hist)
+    ax[2].plot(reward_hist)
+    plt.show()
