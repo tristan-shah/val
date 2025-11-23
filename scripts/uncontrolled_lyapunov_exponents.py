@@ -101,7 +101,7 @@ if __name__ == '__main__':
     #         cmap='viridis',
     #         aspect='auto'
     #     )
-    #     ax.set_title(f'LE 0, t={t * dt} (s)')
+    #     ax.set_title(f'Sum of LE, t={t * dt} (s)')
     #     if i == 0:
     #         ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
     #     fig.colorbar(im, ax=ax)

@@ -29,7 +29,7 @@ if __name__ == '__main__':
     ## hyperparameters
     seed = 105
     key = jax.random.PRNGKey(seed)
-    episode_len = 400
+    episode_len = 50#400
     dt = 0.05
     gamma = 0.99
 
@@ -59,8 +59,6 @@ if __name__ == '__main__':
     Vxx_ad = jax.jacfwd(Vx_ad)
 
 
-
-
     ## load in xml
     xml_path = 'xml/pendulum.xml'
     dyn = Dynamics(path = xml_path, dt = dt)
@@ -68,22 +66,26 @@ if __name__ == '__main__':
     pi = lambda _x: policy(normalize_pendulum_state(_x))
     pi_x = jax.jacfwd(pi)
     pi_xx = jax.jacfwd(pi_x)
+    compute_hessians = jax.jacfwd(dyn.linearize, argnums = (0, 1))
 
     xt = jnp.zeros(dyn.state_dim)
-    xt = xt.at[0].set(2.5)
-    xt = xt.at[1].set(-1.0)
+    xt = xt.at[0].set(0.5)
+    # xt = xt.at[1].set(0.0)
 
+    ## unroll a trajectory under a given policy starting from xt
     X, U = unroll_policy(dyn, xt, pi, episode_len)
+    
+    ## linearize dynamics along nominal trajectory
     fx, fu = jax.vmap(dyn.linearize)(X[:-1], U)
+    ## extract policy gradient
     K = jax.vmap(pi_x)(X[:-1])
-    KK = jax.vmap(pi_xx)(X[:-1])
     ## total derivative
     D = fx + einsum(fu, K, 't x1 u, t u x2 -> t x1 x2')
-
-    ## compute second order derivativees of the dynamics
-    compute_hessians = jax.jacfwd(dyn.linearize, argnums = (0, 1))
+    
+    ## compute second order derivatives of the dynamics
     (fxx, fxu), (fux, fuu) = jax.vmap(compute_hessians)(X[:-1], U)
-
+    ## extract policy hessian
+    KK = jax.vmap(pi_xx)(X[:-1])
     ## compute second order total derivative
     H = fxx \
         + einsum(fxu, K, 't x1 x2 u, t u x3 -> t x1 x2 x3') \
@@ -94,49 +96,56 @@ if __name__ == '__main__':
     ## first order cost derivatives
     cx = jax.vmap(Cx)(X[:-1], U)
     cu = jax.vmap(Cu)(X[:-1], U)
-
     ## second order cost derivatives
     cxx = jax.vmap(Cxx)(X[:-1], U)
     cxu = jax.vmap(Cxu)(X[:-1], U)
     cux = jax.vmap(Cux)(X[:-1], U)
     cuu = jax.vmap(Cuu)(X[:-1], U)
 
-    print(cxu.shape, K.shape)
-
-
-    ## initial values for Vx and Vxx
+    ## last values for Vx and Vxx
     Vx = jnp.zeros(dyn.state_dim)
     Vxx = jnp.zeros((dyn.state_dim, dyn.state_dim))
-    # print(Vx.shape, H.shape)
-
 
     ## history for tracking Vx and Vxx values backwards
     Vx_hist = jnp.zeros((episode_len + 1, dyn.state_dim))
-    Vx_hist = Vx_hist.at[-1].set(Vx)
-
     Vxx_hist = jnp.zeros((episode_len + 1, dyn.state_dim, dyn.state_dim))
+
+    ## set last values in history
+    Vx_hist = Vx_hist.at[-1].set(Vx)
+    Vxx_hist = Vxx_hist.at[-1].set(Vxx)
 
     ## backwards recursion
     for t in reversed(range(episode_len)):
-        Vxx = gamma * D[t].T @ Vxx @ D[t] \
-            + gamma * einsum(Vx, H[t], 'x, x x1 x2 -> x1 x2') \
+
+        ## step value hessian backwards
+        Vxx = \
             + cxx[t] \
             + einsum(cxu[t], K[t], 'x1 u, u x2 -> x1 x2') \
             + einsum(K[t], cux[t], 'u x1, u x2 -> x1 x2') \
-            + einsum(K[t], cuu[t], K[t], 'u1 x1, u1 u2, u2 x2 -> x1 x2')
+            + einsum(K[t], cuu[t], K[t], 'u1 x1, u1 u2, u2 x2 -> x1 x2') \
+            + einsum(cu[t], KK[t], 'u, u x1 x2 -> x1 x2') \
+            + gamma * D[t].T @ Vxx @ D[t] \
+            + gamma * einsum(Vx, H[t], 'x, x x1 x2 -> x1 x2') \
+        
+        ## step value gradient backwards
+        Vx = (cx[t] + K[t].T @ cu[t]) + gamma * D[t].T @ Vx
 
-        Vx = gamma * D[t].T @ Vx + cx[t] + K[t].T @ cu[t]
+        ## log history
         Vx_hist = Vx_hist.at[t].set(Vx)
-
         Vxx_hist = Vxx_hist.at[t].set(Vxx)
-        # print(t, Vx, Vxx)
-        print(Vxx)
+        print(t)
 
-    print(Vxx_hist.shape)
-    plt.plot(jnp.trace(Vxx, axis1 = 1, axis2 = 2))
+
+    Vx_ad_hist = jax.vmap(Vx_ad)(X)
+    Vxx_ad_hist = jax.vmap(Vxx_ad)(X)
+
+    plt.plot(jnp.trace(Vxx_hist, axis1 = 1, axis2 = 2))
+    plt.plot(jnp.trace(Vxx_ad_hist, axis1 = 1, axis2 = 2))
     plt.show()
 
-    # Vx_ad_hist = jax.vmap(Vx_ad)(X)
+
+
+
 
     # fig, ax = plt.subplots(1, 2, figsize = (10, 5))
     # fig.suptitle(r'$\theta_0 = $' + f'{xt[0]}, ' + r'$\dot\theta_0 = $' + f'{xt[1]}')
