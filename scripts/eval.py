@@ -17,14 +17,15 @@ if __name__ == '__main__':
     seed = 105
     key = jax.random.PRNGKey(seed)
     episode_len = 400
+    dt = 0.05
 
-    path = Path('checkpoints/ddpg').resolve()
+    path = Path('checkpoints/vec_ddpg').resolve()
     manager = CheckpointManager(path)
 
     critic = build_pendulum_critic(3, 1, 128, rngs = nnx.Rngs(0))
     policy = build_pendulum_policy(3, 1, 128, rngs = nnx.Rngs(0))
 
-    restored = manager.restore(39860,
+    restored = manager.restore(39900,
         args = ocp.args.Composite(
             critic_state = ocp.args.StandardRestore(nnx.state(critic)),
             policy_state = ocp.args.StandardRestore(nnx.state(policy))
@@ -41,9 +42,10 @@ if __name__ == '__main__':
 
     ## load in xml
     xml_path = 'xml/pendulum.xml'
-    dyn = Dynamics(path = xml_path, dt = 0.05)
+    dyn = Dynamics(path = xml_path, dt = dt)
 
     xt = jnp.zeros(dyn.state_dim)
+    xt = xt.at[0].set(2.0)
 
     X = jnp.zeros((episode_len + 1, dyn.state_dim))
     X = X.at[0].set(xt)

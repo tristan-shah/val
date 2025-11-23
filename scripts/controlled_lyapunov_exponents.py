@@ -50,13 +50,13 @@ if __name__ == '__main__':
     episode_len = 100
     dt = 0.05
 
-    path = Path('checkpoints/ddpg').resolve()
+    path = Path('checkpoints/vec_ddpg').resolve()
     manager = CheckpointManager(path)
 
     critic = build_pendulum_critic(3, 1, 128, rngs = nnx.Rngs(0))
     policy = build_pendulum_policy(3, 1, 128, rngs = nnx.Rngs(0))
 
-    restored = manager.restore(39860,
+    restored = manager.restore(39900,
         args = ocp.args.Composite(
             critic_state = ocp.args.StandardRestore(nnx.state(critic)),
             policy_state = ocp.args.StandardRestore(nnx.state(policy))
@@ -66,8 +66,7 @@ if __name__ == '__main__':
     nnx.update(critic, restored['critic_state'])
     nnx.update(policy, restored['policy_state'])
 
-    ## policy gradient
-
+    ## policy and policy gradient
     pi = lambda _x: policy(normalize_pendulum_state(_x))
     pi_x = jax.jacfwd(pi)
     
@@ -93,41 +92,44 @@ if __name__ == '__main__':
     num_times = 5
     time_indices = jnp.linspace(0, episode_len-1, num_times, dtype = int)
 
-    # fig, axes = plt.subplots(2, num_times, figsize=(4*num_times, 6))
 
-    # for i, t in enumerate(time_indices):
-    #     # First row: LE 0
-    #     ax = axes[0, i]
-    #     im = ax.imshow(
-    #         lce[:, :, t, 0],
-    #         extent=[-3*jnp.pi, 3*jnp.pi, -8, 8],
-    #         origin='lower',
-    #         cmap='viridis',
-    #         aspect='auto'
-    #     )
-    #     ax.set_title(f'LE 0, t={t * dt} (s)')
-    #     if i == 0:
-    #         ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
-    #     fig.colorbar(im, ax=ax)
+    
 
-    #     # Second row: LE 1
-    #     ax = axes[1, i]
-    #     im = ax.imshow(
-    #         lce[:, :, t, 1], 
-    #         extent=[-3*jnp.pi, 3*jnp.pi, -8, 8],
-    #         origin='lower',
-    #         cmap='viridis',
-    #         aspect='auto'
-    #     )
-    #     ax.set_title(f'LE 1, t={t * dt} (s)')
-    #     if i == 0:
-    #         ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
-    #     ax.set_xlabel(r'$\theta$ (rad)')
-    #     fig.colorbar(im, ax=ax)
+    fig, axes = plt.subplots(2, num_times, figsize=(4*num_times, 6))
 
-    # fig.tight_layout()
-    # fig.savefig('controlled_lyapunov.png', dpi = 300)
-    # plt.show()
+    for i, t in enumerate(time_indices):
+        # First row: LE 0
+        ax = axes[0, i]
+        im = ax.imshow(
+            lce[:, :, t, 0],
+            extent=[-3*jnp.pi, 3*jnp.pi, -8, 8],
+            origin='lower',
+            cmap='viridis',
+            aspect='auto'
+        )
+        ax.set_title(f'LE 0, t={t * dt} (s)')
+        if i == 0:
+            ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
+        fig.colorbar(im, ax=ax)
+
+        # Second row: LE 1
+        ax = axes[1, i]
+        im = ax.imshow(
+            lce[:, :, t, 1], 
+            extent=[-3*jnp.pi, 3*jnp.pi, -8, 8],
+            origin='lower',
+            cmap='viridis',
+            aspect='auto'
+        )
+        ax.set_title(f'LE 1, t={t * dt} (s)')
+        if i == 0:
+            ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
+        ax.set_xlabel(r'$\theta$ (rad)')
+        fig.colorbar(im, ax=ax)
+
+    fig.tight_layout()
+    fig.savefig('controlled_lyapunov.png', dpi = 300)
+    plt.show()
 
 
 
@@ -151,5 +153,5 @@ if __name__ == '__main__':
         ax.set_xlabel(r'$\theta$ (rad)')
 
     fig.tight_layout()
-    fig.savefig('controlled_lyapunov.png', dpi = 300)
+    fig.savefig('controlled_lyapunov_sum.png', dpi = 300)
     plt.show()

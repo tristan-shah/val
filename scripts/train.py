@@ -144,8 +144,7 @@ if __name__ == '__main__':
     seed = 105
     key = jax.random.PRNGKey(seed)
     rngs = nnx.Rngs(seed)
-
-    buffer_len = 10_000
+    buffer_len = 100_000
     num_episodes = 100
     episode_len = 400
     gamma = 0.99
@@ -156,12 +155,14 @@ if __name__ == '__main__':
     critic_lr = 1e-3
     policy_lr = 1e-4
     dt = 0.05
+    num_env = 50
 
     ## instantiating the buffer
     buffer = fbx.make_flat_buffer(
         max_length = buffer_len,
         min_length = batch_size,
         sample_batch_size = batch_size,
+        add_batch_size = num_env
     )
 
     ## jit compiling buffer functions
@@ -183,6 +184,7 @@ if __name__ == '__main__':
     policy = build_pendulum_policy(3, dyn.control_dim, h_dim, rngs)
     target_critic = deepcopy(critic)
     target_policy = deepcopy(policy)
+    pi = lambda _x: policy(normalize_pendulum_state(_x))
 
     path = Path('checkpoints/vec_ddpg').resolve()
 
@@ -211,91 +213,91 @@ if __name__ == '__main__':
     critic_loss_hist = []
     policy_loss_hist = []
     reward_hist = []
-
     step = 0
 
-    key, subkey = jax.random.split(key)
-    x = init_pendulum_state(subkey)
-    print(x)
+    for episode in range(num_episodes):
+        key, subkey = jax.random.split(key)
 
-    # for episode in range(num_episodes):
-    #     key, subkey = jax.random.split(key)
+        ## initialize a random batch of states
+        batch_key = jax.random.split(key, num_env)
+        x = jax.vmap(init_pendulum_state)(batch_key)
 
-    #     ## initialize state
-    #     x = init_pendulum_state(subkey)
-    #     done = jnp.bool(0)
-    #     total_reward = 0.0
+        done = jnp.zeros((num_env, 1), dtype = jnp.bool)
+        total_reward = jnp.zeros((num_env, 1))
 
-    #     X = jnp.zeros((episode_len + 1, dyn.state_dim))
-    #     X = X.at[0].set(x)
+        ## run an episode
+        for i in range(episode_len):
+            key, subkey = jax.random.split(key)
 
-    #     ## run an episode
-    #     for i in range(episode_len):
-    #         key, subkey = jax.random.split(key)
+            ## select a batch of random actions
+            u = jax.vmap(pi)(x)
+            key, subkey = jax.random.split(key)
+            u = u + exploration_noise * jax.random.normal(subkey, shape = (num_env, dyn.control_dim))
+            u = jnp.clip(u, low, high)
 
-    #         ## normalize the state (for networks)
-    #         z = normalize_pendulum_state(x)
-            
-    #         ## compute a random action
-    #         u = policy(z)
-    #         u = u + exploration_noise * jax.random.normal(subkey, shape = u.shape)
-    #         u = jnp.clip(u, low, high)
+            ## step the dynamics
+            x_next = jax.vmap(dyn.step)(x, u)
 
-    #         ## step the dynamics
-    #         x_next = dyn.step(x, u)
+            ## compute the reward
+            r = jax.vmap(pendulum_reward)(x, u)
 
-    #         ## compute the reward
-    #         r = pendulum_reward(x, u)
-    #         total_reward += r
+            ## accumulate total reward
+            total_reward += r
 
-    #         ## check if episode is done
-    #         done = jnp.bool(i == episode_len - 1)
+            ## check if episode is done
+            done = done.at[:].set(jnp.bool(i == episode_len - 1))
 
-    #         ## store transition
-    #         sart = SART(s = x,  a = u, r = r, t = done)
+            ## store transition
+            sart = SART(s = x,  a = u, r = r, t = done)
+            buffer_state = buffer.add(buffer_state, sart)
 
-    #         buffer_state = buffer.add(buffer_state, sart)
-    #         ## overwrite previous state
-    #         x = x_next
-    #         X = X.at[i+1].set(x)
+            ## overwrite previous state
+            x = x_next
 
-    #         if buffer.can_sample(buffer_state):
+            if buffer.can_sample(buffer_state):
 
-    #             data = buffer.sample(buffer_state, subkey)
-    #             critic_loss = update_critic(critic, target_critic, target_policy, critic_opt, data.experience)
-    #             policy_loss = update_policy(critic, policy, policy_opt, data.experience)
+                data = buffer.sample(buffer_state, subkey)
 
-    #             target_critic = soft_update(critic, target_critic, tau)
-    #             target_policy = soft_update(policy, target_policy, tau)
+                critic_loss = update_critic(critic, target_critic, target_policy, critic_opt, data.experience)
+                policy_loss = update_policy(critic, policy, policy_opt, data.experience)
 
-    #             critic_loss_hist.append(critic_loss)
-    #             policy_loss_hist.append(policy_loss)
+                target_critic = soft_update(critic, target_critic, tau)
+                target_policy = soft_update(policy, target_policy, tau)
 
-    #             manager.save(step, 
-    #                 args = ocp.args.Composite(
-    #                     critic_state = ocp.args.StandardSave(nnx.state(critic)),
-    #                     policy_state = ocp.args.StandardSave(nnx.state(policy))
-    #                 )
-    #             )
-    #             step += 1
+                critic_loss_hist.append(critic_loss)
+                policy_loss_hist.append(policy_loss)
 
-    #     # if episode % 10 == 0:
-    #     #     dyn.render(X, path = f'test={episode}.mp4', skip = 1)
+                manager.save(step, 
+                    args = ocp.args.Composite(
+                        critic_state = ocp.args.StandardSave(nnx.state(critic)),
+                        policy_state = ocp.args.StandardSave(nnx.state(policy))
+                    )
+                )
+                step += 1
+
+        reward_hist.append(total_reward)
+        print(episode, total_reward.mean(), total_reward.std())
+
+
+    reward_hist = jnp.concatenate(reward_hist, axis = 1)
+    print(reward_hist.shape)
+
+    manager.wait_until_finished()
+
+
+    reward_mean = reward_hist.mean(axis = 0)
+    reward_std = reward_hist.std(axis = 0)
     
-    #     reward_hist.append(total_reward)
-    #     print(total_reward)
 
-    # manager.wait_until_finished()
+    import matplotlib.pyplot as plt
 
-    # import matplotlib.pyplot as plt
-
-    # fig, ax = plt.subplots(1, 3, figsize = (15, 5))
-    # ax[0].set_title('Critic Loss')
-    # ax[0].plot(critic_loss_hist)
+    fig, ax = plt.subplots(1, 3, figsize = (15, 5))
+    ax[0].set_title('Critic Loss')
+    ax[0].plot(critic_loss_hist)
     
-    # ax[1].set_title('Policy Loss')
-    # ax[1].plot(policy_loss_hist)
+    ax[1].set_title('Policy Loss')
+    ax[1].plot(policy_loss_hist)
     
-    # ax[2].set_title('Reward History')
-    # ax[2].plot(reward_hist)
-    # fig.savefig('stats.png', dpi = 300)
+    ax[2].set_title('Reward History')
+    ax[2].plot(reward_mean)
+    fig.savefig('stats.png', dpi = 300)

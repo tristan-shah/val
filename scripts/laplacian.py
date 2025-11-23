@@ -29,17 +29,17 @@ if __name__ == '__main__':
     ## hyperparameters
     seed = 105
     key = jax.random.PRNGKey(seed)
-    episode_len = 50#400
+    episode_len = 400
     dt = 0.05
     gamma = 0.99
 
-    path = Path('checkpoints/ddpg').resolve()
+    path = Path('checkpoints/vec_ddpg').resolve()
     manager = CheckpointManager(path)
 
     critic = build_pendulum_critic(3, 1, 128, rngs = nnx.Rngs(0))
     policy = build_pendulum_policy(3, 1, 128, rngs = nnx.Rngs(0))
 
-    restored = manager.restore(39860,
+    restored = manager.restore(39900,
         args = ocp.args.Composite(
             critic_state = ocp.args.StandardRestore(nnx.state(critic)),
             policy_state = ocp.args.StandardRestore(nnx.state(policy))
@@ -69,8 +69,8 @@ if __name__ == '__main__':
     compute_hessians = jax.jacfwd(dyn.linearize, argnums = (0, 1))
 
     xt = jnp.zeros(dyn.state_dim)
-    xt = xt.at[0].set(0.5)
-    # xt = xt.at[1].set(0.0)
+    xt = xt.at[0].set(3.0)
+    xt = xt.at[1].set(0.0)
 
     ## unroll a trajectory under a given policy starting from xt
     X, U = unroll_policy(dyn, xt, pi, episode_len)
@@ -147,19 +147,19 @@ if __name__ == '__main__':
 
 
 
-    # fig, ax = plt.subplots(1, 2, figsize = (10, 5))
-    # fig.suptitle(r'$\theta_0 = $' + f'{xt[0]}, ' + r'$\dot\theta_0 = $' + f'{xt[1]}')
+    fig, ax = plt.subplots(1, 2, figsize = (10, 5))
+    fig.suptitle(r'$\theta_0 = $' + f'{xt[0]}, ' + r'$\dot\theta_0 = $' + f'{xt[1]}')
 
-    # ax[0].set_title(r'Gradient of Value w.r.t $\theta_t$')
-    # ax[0].set_xlabel('Timestep: t')
-    # ax[0].plot(Vx_hist[:, 0], label = 'Recursion')
-    # ax[0].plot(Vx_ad_hist[:, 0], label = 'Autodiff')
-    # ax[0].legend()
+    ax[0].set_title(r'Gradient of Value w.r.t $\theta_t$')
+    ax[0].set_xlabel('Timestep: t')
+    ax[0].plot(Vx_hist[:, 0], label = 'Recursion')
+    ax[0].plot(Vx_ad_hist[:, 0], label = 'Autodiff')
+    ax[0].legend()
 
-    # ax[1].set_title(r'Gradient of Value w.r.t $\dot\theta_t$')
-    # ax[1].set_xlabel('Timestep: t')
-    # ax[1].plot(Vx_hist[:, 1], label = 'Recursion')
-    # ax[1].plot(Vx_ad_hist[:, 1], label = 'Autodiff')
-    # ax[1].legend()
-    # fig.savefig(f'theta0={xt[0]}_dottheta0={xt[1]}_value_gradient.png', dpi = 300)
-    # plt.show()
+    ax[1].set_title(r'Gradient of Value w.r.t $\dot\theta_t$')
+    ax[1].set_xlabel('Timestep: t')
+    ax[1].plot(Vx_hist[:, 1], label = 'Recursion')
+    ax[1].plot(Vx_ad_hist[:, 1], label = 'Autodiff')
+    ax[1].legend()
+    fig.savefig(f'theta0={xt[0]}_dottheta0={xt[1]}_value_gradient.png', dpi = 300)
+    plt.show()
