@@ -29,7 +29,7 @@ if __name__ == '__main__':
     ## hyperparameters
     seed = 105
     key = jax.random.PRNGKey(seed)
-    episode_len = 2#400
+    episode_len = 400
     dt = 0.05
     gamma = 0.99
 
@@ -56,6 +56,7 @@ if __name__ == '__main__':
         return -critic(jnp.concatenate([z, policy(z)], axis = -1)).squeeze()
     
     Vx_ad = jax.jacrev(V)
+    Vxx_ad = jax.jacfwd(Vx_ad)
 
 
 
@@ -75,41 +76,65 @@ if __name__ == '__main__':
     X, U = unroll_policy(dyn, xt, pi, episode_len)
     fx, fu = jax.vmap(dyn.linearize)(X[:-1], U)
     K = jax.vmap(pi_x)(X[:-1])
+    KK = jax.vmap(pi_xx)(X[:-1])
     ## total derivative
     D = fx + einsum(fu, K, 't x1 u, t u x2 -> t x1 x2')
-    
+
+    ## compute second order derivativees of the dynamics
     compute_hessians = jax.jacfwd(dyn.linearize, argnums = (0, 1))
     (fxx, fxu), (fux, fuu) = jax.vmap(compute_hessians)(X[:-1], U)
-    print(fxx.shape, fxu.shape, fux.shape, fuu.shape, K.shape)
 
     ## compute second order total derivative
     H = fxx \
         + einsum(fxu, K, 't x1 x2 u, t u x3 -> t x1 x2 x3') \
         + einsum(K, fux, 't u x3, t x1 x2 u -> t x1 x2 x3') \
-        + einsum(K, fuu, K, 't u1 x2, t x1 u1 u2, t u2 x3 -> t x1 x2 x3')
+        + einsum(K, fuu, K, 't u1 x2, t x1 u1 u2, t u2 x3 -> t x1 x2 x3') \
+        + einsum(fu, KK, 't x1 u, t u x2 x3 -> t x1 x2 x3')
+    
+    ## first order cost derivatives
+    cx = jax.vmap(Cx)(X[:-1], U)
+    cu = jax.vmap(Cu)(X[:-1], U)
 
-    print(jax.vmap(pi_xx)(X[:-1]))
+    ## second order cost derivatives
+    cxx = jax.vmap(Cxx)(X[:-1], U)
+    cxu = jax.vmap(Cxu)(X[:-1], U)
+    cux = jax.vmap(Cux)(X[:-1], U)
+    cuu = jax.vmap(Cuu)(X[:-1], U)
+
+    print(cxu.shape, K.shape)
 
 
-    # cx = jax.vmap(Cx)(X[:-1], U)
-    # cu = jax.vmap(Cu)(X[:-1], U)
+    ## initial values for Vx and Vxx
+    Vx = jnp.zeros(dyn.state_dim)
+    Vxx = jnp.zeros((dyn.state_dim, dyn.state_dim))
+    # print(Vx.shape, H.shape)
 
 
-    # ## initial values for Vx and Vxx
-    # Vx = jnp.zeros(dyn.state_dim)
-    # Vxx = jnp.zeros((dyn.state_dim, dyn.state_dim))
+    ## history for tracking Vx and Vxx values backwards
+    Vx_hist = jnp.zeros((episode_len + 1, dyn.state_dim))
+    Vx_hist = Vx_hist.at[-1].set(Vx)
 
-    # ## history for tracking Vx and Vxx values backwards
-    # Vx_hist = jnp.zeros((episode_len + 1, dyn.state_dim))
-    # Vx_hist = Vx_hist.at[-1].set(Vx)
+    Vxx_hist = jnp.zeros((episode_len + 1, dyn.state_dim, dyn.state_dim))
 
-    # ## backwards recursion
-    # for t in reversed(range(episode_len)):
-    #     # Vxx = gamma * ( D[t].T @ Vxx @ D[t] + Vx.T @ )
+    ## backwards recursion
+    for t in reversed(range(episode_len)):
+        Vxx = gamma * D[t].T @ Vxx @ D[t] \
+            + gamma * einsum(Vx, H[t], 'x, x x1 x2 -> x1 x2') \
+            + cxx[t] \
+            + einsum(cxu[t], K[t], 'x1 u, u x2 -> x1 x2') \
+            + einsum(K[t], cux[t], 'u x1, u x2 -> x1 x2') \
+            + einsum(K[t], cuu[t], K[t], 'u1 x1, u1 u2, u2 x2 -> x1 x2')
 
-    #     Vx = gamma * D[t].T @ Vx + cx[t] + K[t].T @ cu[t]
-    #     Vx_hist = Vx_hist.at[t].set(Vx)
-    #     print(t, Vx)
+        Vx = gamma * D[t].T @ Vx + cx[t] + K[t].T @ cu[t]
+        Vx_hist = Vx_hist.at[t].set(Vx)
+
+        Vxx_hist = Vxx_hist.at[t].set(Vxx)
+        # print(t, Vx, Vxx)
+        print(Vxx)
+
+    print(Vxx_hist.shape)
+    plt.plot(jnp.trace(Vxx, axis1 = 1, axis2 = 2))
+    plt.show()
 
     # Vx_ad_hist = jax.vmap(Vx_ad)(X)
 
