@@ -184,7 +184,7 @@ if __name__ == '__main__':
     target_critic = deepcopy(critic)
     target_policy = deepcopy(policy)
 
-    path = Path('checkpoints/ddpg').resolve()
+    path = Path('checkpoints/vec_ddpg').resolve()
 
     ## Create a checkpointer
     options = ocp.CheckpointManagerOptions(
@@ -214,84 +214,88 @@ if __name__ == '__main__':
 
     step = 0
 
-    for episode in range(num_episodes):
-        key, subkey = jax.random.split(key)
+    key, subkey = jax.random.split(key)
+    x = init_pendulum_state(subkey)
+    print(x)
 
-        ## initialize state
-        x = init_pendulum_state(subkey)
-        done = jnp.bool(0)
-        total_reward = 0.0
+    # for episode in range(num_episodes):
+    #     key, subkey = jax.random.split(key)
 
-        X = jnp.zeros((episode_len + 1, dyn.state_dim))
-        X = X.at[0].set(x)
+    #     ## initialize state
+    #     x = init_pendulum_state(subkey)
+    #     done = jnp.bool(0)
+    #     total_reward = 0.0
 
-        ## run an episode
-        for i in range(episode_len):
-            key, subkey = jax.random.split(key)
+    #     X = jnp.zeros((episode_len + 1, dyn.state_dim))
+    #     X = X.at[0].set(x)
 
-            ## normalize the state (for networks)
-            z = normalize_pendulum_state(x)
+    #     ## run an episode
+    #     for i in range(episode_len):
+    #         key, subkey = jax.random.split(key)
+
+    #         ## normalize the state (for networks)
+    #         z = normalize_pendulum_state(x)
             
-            ## compute a random action
-            u = policy(z)
-            u = u + exploration_noise * jax.random.normal(subkey, shape = u.shape)
-            u = jnp.clip(u, low, high)
+    #         ## compute a random action
+    #         u = policy(z)
+    #         u = u + exploration_noise * jax.random.normal(subkey, shape = u.shape)
+    #         u = jnp.clip(u, low, high)
 
-            ## step the dynamics
-            x_next = dyn.step(x, u)
+    #         ## step the dynamics
+    #         x_next = dyn.step(x, u)
 
-            ## compute the reward
-            r = pendulum_reward(x, u)
-            total_reward += r
+    #         ## compute the reward
+    #         r = pendulum_reward(x, u)
+    #         total_reward += r
 
-            ## check if episode is done
-            done = jnp.bool(i == episode_len - 1)
+    #         ## check if episode is done
+    #         done = jnp.bool(i == episode_len - 1)
 
-            ## store transition
-            sart = SART(s = x,  a = u, r = r, t = done)
+    #         ## store transition
+    #         sart = SART(s = x,  a = u, r = r, t = done)
 
-            buffer_state = buffer.add(buffer_state, sart)
-            ## overwrite previous state
-            x = x_next
-            X = X.at[i+1].set(x)
+    #         buffer_state = buffer.add(buffer_state, sart)
+    #         ## overwrite previous state
+    #         x = x_next
+    #         X = X.at[i+1].set(x)
 
-            if buffer.can_sample(buffer_state):
+    #         if buffer.can_sample(buffer_state):
 
-                data = buffer.sample(buffer_state, subkey)
-                critic_loss = update_critic(critic, target_critic, target_policy, critic_opt, data.experience)
-                policy_loss = update_policy(critic, policy, policy_opt, data.experience)
+    #             data = buffer.sample(buffer_state, subkey)
+    #             critic_loss = update_critic(critic, target_critic, target_policy, critic_opt, data.experience)
+    #             policy_loss = update_policy(critic, policy, policy_opt, data.experience)
 
-                target_critic = soft_update(critic, target_critic, tau)
-                target_policy = soft_update(policy, target_policy, tau)
+    #             target_critic = soft_update(critic, target_critic, tau)
+    #             target_policy = soft_update(policy, target_policy, tau)
 
-                critic_loss_hist.append(critic_loss)
-                policy_loss_hist.append(policy_loss)
+    #             critic_loss_hist.append(critic_loss)
+    #             policy_loss_hist.append(policy_loss)
 
-                manager.save(step, 
-                    args = ocp.args.Composite(
-                        critic_state = ocp.args.StandardSave(nnx.state(critic)),
-                        policy_state = ocp.args.StandardSave(nnx.state(policy))
-                    )
-                )
-                step += 1
+    #             manager.save(step, 
+    #                 args = ocp.args.Composite(
+    #                     critic_state = ocp.args.StandardSave(nnx.state(critic)),
+    #                     policy_state = ocp.args.StandardSave(nnx.state(policy))
+    #                 )
+    #             )
+    #             step += 1
 
-        # if episode % 10 == 0:
-        #     dyn.render(X, path = f'test={episode}.mp4', skip = 1)
+    #     # if episode % 10 == 0:
+    #     #     dyn.render(X, path = f'test={episode}.mp4', skip = 1)
     
-        reward_hist.append(total_reward)
-        print(total_reward)
+    #     reward_hist.append(total_reward)
+    #     print(total_reward)
 
-    manager.wait_until_finished()
+    # manager.wait_until_finished()
 
-    import matplotlib.pyplot as plt
+    # import matplotlib.pyplot as plt
 
-    fig, ax = plt.subplots(1, 3, figsize = (15, 5))
-    ax[0].set_title('Critic Loss')
-    ax[0].plot(critic_loss_hist)
+    # fig, ax = plt.subplots(1, 3, figsize = (15, 5))
+    # ax[0].set_title('Critic Loss')
+    # ax[0].plot(critic_loss_hist)
     
-    ax[1].set_title('Policy Loss')
-    ax[1].plot(policy_loss_hist)
+    # ax[1].set_title('Policy Loss')
+    # ax[1].plot(policy_loss_hist)
     
-    ax[2].set_title('Reward History')
-    ax[2].plot(reward_hist)
-    fig.savefig('stats.png', dpi = 300)
+    # ax[2].set_title('Reward History')
+    # ax[2].plot(reward_hist)
+    # fig.savefig('stats.png', dpi = 300)
