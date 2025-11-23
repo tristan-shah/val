@@ -1,21 +1,29 @@
+import os
+from pathlib import Path
 from copy import deepcopy
-from typing import Optional
 
 import jax
 from jax import Array
 from jax import numpy as jnp
+import flax
 from flax import nnx
 import flashbax as fbx
 from flashbax.buffers.flat_buffer import TransitionSample
 import chex
 import optax
+import orbax.checkpoint as ocp
+
+
 
 from val import Dynamics
+from val.utils import smooth_angle_wrap
 
 def build_pendulum_critic(state_dim: int, act_dim:int, h_dim: int, rngs: nnx.Rngs):
 
     critic = nnx.Sequential(
         nnx.Linear(state_dim + act_dim, h_dim, rngs = rngs),
+        nnx.gelu,
+        nnx.Linear(h_dim, h_dim, rngs = rngs),
         nnx.gelu,
         nnx.Linear(h_dim, h_dim, rngs = rngs),
         nnx.gelu,
@@ -30,6 +38,8 @@ def build_pendulum_policy(state_dim: int, act_dim:int, h_dim: int, rngs: nnx.Rng
 
     policy = nnx.Sequential(
         nnx.Linear(state_dim, h_dim, rngs = rngs),
+        nnx.gelu,
+        nnx.Linear(h_dim, h_dim, rngs = rngs),
         nnx.gelu,
         nnx.Linear(h_dim, h_dim, rngs = rngs),
         nnx.gelu,
@@ -53,7 +63,7 @@ def soft_update(model, target_model, tau=0.005):
 @jax.jit
 def init_pendulum_state(key):
     xt = jax.random.uniform(key, shape = 2) * 2 - 1
-    xt = xt * jnp.array([jnp.pi, 3 * jnp.pi])
+    xt = xt * jnp.array([jnp.pi, 1.0])
     return xt
 
 @jax.jit
@@ -65,7 +75,13 @@ def normalize_pendulum_state(xt: Array, max_vel: float = 3 * jnp.pi):
 
 @jax.jit
 def pendulum_reward(xt: Array, ut: Array):
-    return jnp.cos(xt[0]) - 0.1 * ut ** 2
+    theta = xt[0]
+    theta_dot = xt[1]
+    angle_cost = smooth_angle_wrap(theta - jnp.pi) ** 2
+    vel_cost = 0.1 * theta_dot ** 2
+    act_cost = 0.5 * ut ** 2
+    
+    return -(angle_cost + vel_cost + act_cost)
 
 @chex.dataclass(frozen = True)
 class SART:
@@ -98,7 +114,7 @@ def update_critic(critic, target_critic, target_policy, critic_opt, experience: 
 
         ## compute Bellman TD target
         y = r + (1.0 - t) * gamma * q_
-        return jnp.mean(jnp.square(q - y))
+        return jnp.mean(optax.huber_loss(q, y))
     
     loss, grads = nnx.value_and_grad(loss_fn)(critic)
     critic_opt.update(grads)
@@ -112,9 +128,8 @@ def update_policy(critic, policy, policy_opt, experience: TransitionSample):
     x = experience.first.s
 
     def loss_fn(policy):
-         ## normalize states
+        ## normalize states
         z = jax.vmap(normalize_pendulum_state)(x)
-
         q = critic(jnp.concatenate([z, policy(z)], axis = -1))
 
         return - jnp.mean(q)
@@ -132,15 +147,15 @@ if __name__ == '__main__':
 
     buffer_len = 10_000
     num_episodes = 100
-    episode_len = 200
+    episode_len = 400
     gamma = 0.99
-    batch_size = 64
-    exploration_noise = 0.2
+    batch_size = 128
+    exploration_noise = 0.1
     tau = 0.005
     h_dim = 128
-
     critic_lr = 1e-3
     policy_lr = 1e-4
+    dt = 0.05
 
     ## instantiating the buffer
     buffer = fbx.make_flat_buffer(
@@ -159,7 +174,7 @@ if __name__ == '__main__':
 
     ## load in xml
     xml_path = 'xml/pendulum.xml'
-    dyn = Dynamics(path = xml_path)
+    dyn = Dynamics(path = xml_path, dt = dt)
     low = dyn.mjx_model.actuator_ctrlrange[:, 0]
     high = dyn.mjx_model.actuator_ctrlrange[:, 1]
     
@@ -168,6 +183,16 @@ if __name__ == '__main__':
     policy = build_pendulum_policy(3, dyn.control_dim, h_dim, rngs)
     target_critic = deepcopy(critic)
     target_policy = deepcopy(policy)
+
+    path = Path('checkpoints/ddpg').resolve()
+
+    ## Create a checkpointer
+    options = ocp.CheckpointManagerOptions(
+        save_decision_policy = ocp.checkpoint_managers.save_decision_policy.FixedIntervalPolicy(100),
+        preservation_policy = ocp.checkpoint_managers.preservation_policy.LatestN(4)
+    )
+
+    manager = ocp.CheckpointManager(path, options = options)
 
     critic_opt = nnx.Optimizer(critic, optax.adam(critic_lr))
     policy_opt = nnx.Optimizer(policy, optax.adam(policy_lr))
@@ -187,6 +212,8 @@ if __name__ == '__main__':
     policy_loss_hist = []
     reward_hist = []
 
+    step = 0
+
     for episode in range(num_episodes):
         key, subkey = jax.random.split(key)
 
@@ -194,6 +221,9 @@ if __name__ == '__main__':
         x = init_pendulum_state(subkey)
         done = jnp.bool(0)
         total_reward = 0.0
+
+        X = jnp.zeros((episode_len + 1, dyn.state_dim))
+        X = X.at[0].set(x)
 
         ## run an episode
         for i in range(episode_len):
@@ -223,6 +253,7 @@ if __name__ == '__main__':
             buffer_state = buffer.add(buffer_state, sart)
             ## overwrite previous state
             x = x_next
+            X = X.at[i+1].set(x)
 
             if buffer.can_sample(buffer_state):
 
@@ -235,15 +266,32 @@ if __name__ == '__main__':
 
                 critic_loss_hist.append(critic_loss)
                 policy_loss_hist.append(policy_loss)
-        
-        reward_hist.append(total_reward)
 
+                manager.save(step, 
+                    args = ocp.args.Composite(
+                        critic_state = ocp.args.StandardSave(nnx.state(critic)),
+                        policy_state = ocp.args.StandardSave(nnx.state(policy))
+                    )
+                )
+                step += 1
+
+        # if episode % 10 == 0:
+        #     dyn.render(X, path = f'test={episode}.mp4', skip = 1)
+    
+        reward_hist.append(total_reward)
         print(total_reward)
+
+    manager.wait_until_finished()
 
     import matplotlib.pyplot as plt
 
-    fig, ax = plt.subplots(1, 3)
+    fig, ax = plt.subplots(1, 3, figsize = (15, 5))
+    ax[0].set_title('Critic Loss')
     ax[0].plot(critic_loss_hist)
+    
+    ax[1].set_title('Policy Loss')
     ax[1].plot(policy_loss_hist)
+    
+    ax[2].set_title('Reward History')
     ax[2].plot(reward_hist)
-    plt.show()
+    fig.savefig('stats.png', dpi = 300)
