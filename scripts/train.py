@@ -144,7 +144,7 @@ if __name__ == '__main__':
     seed = 105
     key = jax.random.PRNGKey(seed)
     rngs = nnx.Rngs(seed)
-    buffer_len = 100_000
+    buffer_len = 1_000_000
     num_episodes = 100
     episode_len = 400
     gamma = 0.99
@@ -155,7 +155,7 @@ if __name__ == '__main__':
     critic_lr = 1e-3
     policy_lr = 1e-4
     dt = 0.05
-    num_env = 50
+    num_env = 100
 
     ## instantiating the buffer
     buffer = fbx.make_flat_buffer(
@@ -186,7 +186,7 @@ if __name__ == '__main__':
     target_policy = deepcopy(policy)
     pi = lambda _x: policy(normalize_pendulum_state(_x))
 
-    path = Path('checkpoints/vec_ddpg').resolve()
+    path = Path(f'checkpoints/num_env={num_env}_vec_ddpg').resolve()
 
     ## Create a checkpointer
     options = ocp.CheckpointManagerOptions(

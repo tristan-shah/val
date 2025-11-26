@@ -25,7 +25,7 @@ if __name__ == '__main__':
     ## hyperparameters
     seed = 105
     key = jax.random.PRNGKey(seed)
-    episode_len = 100
+    episode_len = 200
     
     ## load in xml
     xml_path = 'xml/pendulum.xml'
@@ -37,10 +37,12 @@ if __name__ == '__main__':
     # Create a grid over theta and theta_dot
     n_theta = 100
     n_theta_dot = 100
+    theta_min, theta_max = -2 * jnp.pi, 2 * jnp.pi
+    theta_dot_min, theta_dot_max = -6, 6
 
     # Create meshgrid
-    theta_grid = jnp.linspace(-3 * jnp.pi, 3 * jnp.pi, n_theta)
-    theta_dot_grid = jnp.linspace(-8, 8, n_theta_dot)
+    theta_grid = jnp.linspace(theta_min, theta_max, n_theta)
+    theta_dot_grid = jnp.linspace(theta_dot_min, theta_dot_max, n_theta_dot)
     Theta, Theta_dot = jnp.meshgrid(theta_grid, theta_dot_grid)
     grid_points = jnp.stack([Theta.ravel(), Theta_dot.ravel()], axis=1)
 
@@ -59,7 +61,7 @@ if __name__ == '__main__':
         ax = axes[0, i]
         im = ax.imshow(
             lce[:, :, t, 0], 
-            extent=[-3*jnp.pi, 3*jnp.pi, -8, 8],
+            extent=[theta_min, theta_max, theta_dot_min, theta_dot_max],
             origin='lower',
             cmap='viridis',
             aspect='auto'
@@ -73,7 +75,7 @@ if __name__ == '__main__':
         ax = axes[1, i]
         im = ax.imshow(
             lce[:, :, t, 1],
-            extent=[-3*jnp.pi, 3*jnp.pi, -8, 8],
+            extent=[theta_min, theta_max, theta_dot_min, theta_dot_max],
             origin='lower',
             cmap='viridis',
             aspect='auto'

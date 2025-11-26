@@ -9,7 +9,7 @@ import orbax.checkpoint as ocp
 from orbax.checkpoint import CheckpointManager
 import matplotlib.pyplot as plt
 
-from val import Dynamics, unroll
+from val import Dynamics
 
 from train import build_pendulum_critic, build_pendulum_policy, normalize_pendulum_state, pendulum_reward
 from controlled_lyapunov_exponents import unroll_policy
@@ -52,11 +52,13 @@ if __name__ == '__main__':
 
     ## build value function from critic and policy
     def V(_x: Array):
-        z = normalize_pendulum_state(_x)
-        return -critic(jnp.concatenate([z, policy(z)], axis = -1)).squeeze()
+        _z = normalize_pendulum_state(_x)
+        return -critic(jnp.concatenate([_z, policy(_z)], axis = -1)).squeeze()
     
-    Vx_ad = jax.jacrev(V)
-    Vxx_ad = jax.jacfwd(Vx_ad)
+    # Vx_ad = jax.jacrev(V)
+    # Vxx_ad = jax.jacfwd(Vx_ad)
+    Vx_ad = jax.jacobian(V)
+    Vxx_ad = jax.hessian(V)
 
 
     ## load in xml
@@ -69,7 +71,7 @@ if __name__ == '__main__':
     compute_hessians = jax.jacfwd(dyn.linearize, argnums = (0, 1))
 
     xt = jnp.zeros(dyn.state_dim)
-    xt = xt.at[0].set(3.0)
+    xt = xt.at[0].set(0.9)
     xt = xt.at[1].set(0.0)
 
     ## unroll a trajectory under a given policy starting from xt
@@ -105,6 +107,8 @@ if __name__ == '__main__':
     ## last values for Vx and Vxx
     Vx = jnp.zeros(dyn.state_dim)
     Vxx = jnp.zeros((dyn.state_dim, dyn.state_dim))
+    # Vx = Vx_ad(X[-1])
+    # Vxx = Vxx_ad(X[-1])
 
     ## history for tracking Vx and Vxx values backwards
     Vx_hist = jnp.zeros((episode_len + 1, dyn.state_dim))
@@ -125,7 +129,7 @@ if __name__ == '__main__':
             + einsum(K[t], cuu[t], K[t], 'u1 x1, u1 u2, u2 x2 -> x1 x2') \
             + einsum(cu[t], KK[t], 'u, u x1 x2 -> x1 x2') \
             + gamma * D[t].T @ Vxx @ D[t] \
-            + gamma * einsum(Vx, H[t], 'x, x x1 x2 -> x1 x2') \
+            + gamma * einsum(Vx, H[t], 'x, x x1 x2 -> x1 x2')
         
         ## step value gradient backwards
         Vx = (cx[t] + K[t].T @ cu[t]) + gamma * D[t].T @ Vx

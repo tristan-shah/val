@@ -19,7 +19,7 @@ if __name__ == '__main__':
     episode_len = 400
     dt = 0.05
 
-    path = Path('checkpoints/vec_ddpg').resolve()
+    path = Path('checkpoints/num_env=100_vec_ddpg').resolve()
     manager = CheckpointManager(path)
 
     critic = build_pendulum_critic(3, 1, 128, rngs = nnx.Rngs(0))
@@ -45,7 +45,7 @@ if __name__ == '__main__':
     dyn = Dynamics(path = xml_path, dt = dt)
 
     xt = jnp.zeros(dyn.state_dim)
-    xt = xt.at[0].set(2.0)
+    xt = xt.at[0].set(0.0)
 
     X = jnp.zeros((episode_len + 1, dyn.state_dim))
     X = X.at[0].set(xt)

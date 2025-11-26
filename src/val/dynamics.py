@@ -122,3 +122,21 @@ def unroll(dyn: Dynamics, xt: Array, U: Array):
 
 ## jit compilation of the unroll function
 unroll = jax.jit(unroll, static_argnums = 0)
+
+def unroll_policy(dyn: Dynamics, xt: Array, pi: callable, T: int):
+    '''
+    Unroll a trajectory using a policy for T steps.
+    dyn, policy, and T must all be static (Python objects or integers).
+    '''
+    def body_fun(carry, _):
+        xt_ = carry
+        ut_ = pi(xt_)
+        xt_next = dyn.step(xt_, ut_)
+        return xt_next, (xt_next, ut_)
+
+    _, (X, U) = jax.lax.scan(body_fun, xt, xs=None, length=T)
+    X = jnp.concatenate([xt[None, :], X], axis=0)
+    return X, U
+
+# Mark dyn, policy, and T as static
+unroll_policy = jax.jit(unroll_policy, static_argnums=(0, 2, 3))

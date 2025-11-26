@@ -10,28 +10,10 @@ import orbax.checkpoint as ocp
 from orbax.checkpoint import CheckpointManager
 import matplotlib.pyplot as plt
 
-from val import Dynamics, unroll
+from val import Dynamics, unroll, unroll_policy
 from val.utils import estimate_lyapunov_hist
 
 from train import build_pendulum_critic, build_pendulum_policy, normalize_pendulum_state, init_pendulum_state, pendulum_reward
-
-def unroll_policy(dyn: Dynamics, xt: Array, pi: callable, T: int):
-    """
-    Unroll a trajectory using a policy for T steps.
-    dyn, policy, and T must all be static (Python objects or integers).
-    """
-    def body_fun(carry, _):
-        xt_ = carry
-        ut_ = pi(xt_)
-        xt_next = dyn.step(xt_, ut_)
-        return xt_next, (xt_next, ut_)
-
-    _, (X, U) = jax.lax.scan(body_fun, xt, xs=None, length=T)
-    X = jnp.concatenate([xt[None, :], X], axis=0)
-    return X, U
-
-# Mark dyn, policy, and T as static
-unroll_policy = jax.jit(unroll_policy, static_argnums=(0, 2, 3))
 
 def compute_controlled_LE(dyn: Dynamics, xt: Array, pi: callable, pi_x: callable, T: int):
     X, U = unroll_policy(dyn, xt, pi, T)
@@ -75,8 +57,8 @@ if __name__ == '__main__':
     dyn = Dynamics(path = xml_path, dt = dt)
 
     # Create a grid over theta and theta_dot
-    n_theta = 200
-    n_theta_dot = 200
+    n_theta = 100
+    n_theta_dot = 100
 
     # Create meshgrid
     theta_grid = jnp.linspace(-3 * jnp.pi, 3 * jnp.pi, n_theta)

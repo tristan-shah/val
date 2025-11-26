@@ -12,7 +12,6 @@ from val import Dynamics, unroll
 
 from train import build_pendulum_critic, build_pendulum_policy, normalize_pendulum_state
 
-
 if __name__ == '__main__':
 
     path = Path('checkpoints/vec_ddpg').resolve()
@@ -43,8 +42,8 @@ if __name__ == '__main__':
     Vxx = jax.jit(Vxx)
 
     # Create a grid over theta and theta_dot
-    n_theta = 200
-    n_theta_dot = 200
+    n_theta = 100
+    n_theta_dot = 100
 
     # Create meshgrid
     theta_grid = jnp.linspace(-3 * jnp.pi, 3 * jnp.pi, n_theta)
@@ -53,10 +52,10 @@ if __name__ == '__main__':
     grid_points = jnp.stack([Theta.ravel(), Theta_dot.ravel()], axis=1)
 
     ## evaluate value function
-    # v = jax.vmap(V)(grid_points)
-    # vx = jax.vmap(Vx)(grid_points)
-    # print(v.shape)
-    # print(vx.shape)
+    v = jax.vmap(V)(grid_points)
+    vx = jax.vmap(Vx)(grid_points)
+    print(v.shape)
+    print(vx.shape)
 
     ## evaluate laplacian of value function
     laplacian = jnp.trace(jax.vmap(Vxx)(grid_points), axis1 = 1, axis2 = 2)
@@ -80,18 +79,23 @@ if __name__ == '__main__':
 
     # step = 4  # thinning factor for arrows
     # scale = 0.3
-    # vec = vx_grid[::step, ::step]
+    # # vec = vx_grid[::step, ::step]
+    # vec = vx_grid
     # norm = jnp.linalg.norm(vec, axis=-1, keepdims=True) + 1e-8
     # vec_unit = vec / norm
     # ax.quiver(Theta[::step,::step], Theta_dot[::step,::step],
     #         -scale * vec_unit[...,0], - scale * vec_unit[...,1],
     #         color='white', alpha = 0.8, scale = 20)
+    
+    # ax.quiver(Theta, Theta_dot,
+    #     -scale * vec_unit[...,0], - scale * vec_unit[...,1],
+    #     color='white', alpha = 0.8, scale = 20)
 
 
     ax.set_xlabel(r'$\theta$ (rad)')
     ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
-    ax.set_title('Value for Pendulum-v1')
-    # ax.set_title('Laplacian for Pendulum-v1')
+    # ax.set_title('Learned Value for Pendulum-v1')
+    ax.set_title('Laplacian for Pendulum-v1')
 
     # Add colorbar (placed nicely on the side)
     cbar = fig.colorbar(im, ax = ax, shrink = 0.8, pad = 0.05)
