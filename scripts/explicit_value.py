@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Callable
 
 import jax
 from jax import Array
@@ -10,61 +9,17 @@ import orbax.checkpoint as ocp
 from orbax.checkpoint import CheckpointManager
 import matplotlib.pyplot as plt
 
-from val import Dynamics, unroll_policy
+from val import Dynamics, make_step, make_unroll_policy
 
-from train import build_pendulum_critic, build_pendulum_policy, normalize_pendulum_state, pendulum_reward
-
-@jax.jit
-def C(_x: Array, _u: Array):
-    return -pendulum_reward(_x, _u).squeeze()
-
-linearize_cost = jax.jacobian(C, argnums = (0, 1))
-quadraticize_cost = jax.jacfwd(linearize_cost, argnums = (0, 1))
-
-def compute_discounted_cost(X: Array, U:Array, gamma: float):
-    c = jax.vmap(C)(X[:-1], U)
-
-    def body_fun(G: Array, c_t: Array):
-        G = c_t + gamma * G
-        return G, G
-    
-    G0, _ = jax.lax.scan(body_fun, init = 0.0, xs = c, reverse = True)
-    return G0
-
-compute_discounted_cost = jax.jit(compute_discounted_cost)
-
-def compute_cost_to_go(dyn: Dynamics, xt: Array, pi: callable, T: int, gamma: float):
-    X, U = unroll_policy(dyn, xt, pi, T)
-    return compute_discounted_cost(X, U, gamma)
-
-compute_cost_to_go = jax.jit(compute_cost_to_go, static_argnums = (0, 2, 3))
-
-def compute_cost_grad(dyn: Dynamics, xt: Array, pi: callable, pi_x: callable, T: int, gamma: float):
-    
-    X, U = unroll_policy(dyn, xt, pi, T)
-    fx, fu = jax.vmap(dyn.linearize)(X[:-1], U)
-    K = jax.vmap(pi_x)(X[:-1])
-    D = fx + einsum(fu, K, 't x1 u, t u x2 -> t x1 x2')
-
-    cx, cu = jax.vmap(linearize_cost)(X[:-1], U)
-
-    def body_fun(Gx: Array, inputs: tuple):
-        D_t, K_t, cx_t, cu_t = inputs
-        Gx = gamma * D_t.T @ Gx + cx_t + K_t.T @ cu_t
-        return Gx, Gx
-
-    Gx_T = jnp.zeros_like(xt)
-    _, Gx_t = jax.lax.scan(body_fun, init = Gx_T, xs = (D, K, cx, cu), reverse = True)
-
-    return jnp.concatenate([Gx_t, Gx_T[None, :]], axis = 0)
-
-compute_cost_grad = jax.jit(compute_cost_grad, static_argnums = (0, 2, 3, 4))
+from train import build_pendulum_critic, build_pendulum_policy, normalize_pendulum_state
+from val.pendulum import normalize_pendulum_state, pendulum_cost
+from val.utils import make_compute_value, make_compute_value_grad, make_compute_value_taylor, make_compute_ddp_hessian, make_compute_ilqr_hessian
 
 if __name__ == '__main__':
     ## hyperparameters
     seed = 105
     key = jax.random.PRNGKey(seed)
-    episode_len = 400
+    episode_len = 50 #400
     dt = 0.05
     gamma = 0.99
 
@@ -84,112 +39,131 @@ if __name__ == '__main__':
     nnx.update(critic, restored['critic_state'])
     nnx.update(policy, restored['policy_state'])
 
-    ## policy and policy gradient
+    ## make a policy
     pi = jax.jit(lambda _x: policy(normalize_pendulum_state(_x)))
-    pi_x = jax.jit(jax.jacfwd(pi))
-    pi_xx = jax.jit(jax.jacfwd(pi_x))
 
-    ## load in xml
-    xml_path = 'xml/pendulum.xml'
-    dyn = Dynamics(path = xml_path, dt = dt)
-    quadraticize = jax.jacfwd(dyn.linearize, argnums = (0, 1))
+    ## load in dynamics
+    dyn = Dynamics(path = 'xml/pendulum.xml', dt = dt)
+    step = make_step(dyn)
+
+    ## build functions
+    unroll_policy = make_unroll_policy(step, pi, episode_len)
+    ## taylor expansion
+    compute_value = make_compute_value(pendulum_cost)
+    compute_value_grad = make_compute_value_grad(step, pi, pendulum_cost)
+    compute_value_taylor = make_compute_value_taylor(step, pi, pendulum_cost)
+    compute_ddp_hessian = make_compute_ddp_hessian(step, pi, pendulum_cost)
+    compute_ilqr_hessian = make_compute_ilqr_hessian(step, pi, pendulum_cost)
+    
+    @jax.jit
+    def cost_to_go(xt: Array):
+        X, U = unroll_policy(xt)
+        return compute_value(X, U, gamma)
 
     xt = jnp.zeros(dyn.state_dim)
-    xt = xt.at[0].set(0.1)
-    xt = xt.at[1].set(0.0)
 
-    X, U = unroll_policy(dyn, xt, pi, episode_len)
-    fx, fu = jax.vmap(dyn.linearize)(X[:-1], U)
-    (fxx, fxu), (fux, fuu) = jax.vmap(quadraticize)(X[:-1], U)
+    # xt = xt.at[0].set(-1.78)
+    # xt = xt.at[1].set(2.3)
+    # theta_min, theta_max = -1.784, -1.774
 
-    K = jax.vmap(pi_x)(X[:-1])
-    KK = jax.vmap(pi_xx)(X[:-1])
+    ## looks nice. not representative.
+    # xt = xt.at[0].set(-1.571)
+    # xt = xt.at[1].set(0.1)
+    # theta_min, theta_max = -1.58, -1.566
 
-    D = fx + einsum(fu, K, 't x1 u, t u x2 -> t x1 x2')
-    cx, cu = jax.vmap(linearize_cost)(X[:-1], U)
-    (cxx, cxu), (cux, cuu) = jax.vmap(quadraticize_cost)(X[:-1], U)
+    ## negative curvature
+    # xt = xt.at[0].set(0.795)
+    # xt = xt.at[0].set(0.812)
+    # xt = xt.at[0].set(1.31)
+    xt = xt.at[0].set(1.0)
+    xt = xt.at[1].set(2.0)
+    theta_min, theta_max = -2.0, 2.0
 
-    Czz = cxx \
-        + einsum(cxu, K, 't x1 u, t u x2 -> t x1 x2') \
-        + einsum(K, cux, 't u x1, t u x2 -> t x1 x2') \
-        + einsum(K, cuu, K, 't u1 x1, t u1 u2, t u2 x2 -> t x1 x2')
+    X, U = unroll_policy(xt)
+    V_bar = compute_value(X, U, gamma)
+    Vx, Vxx = compute_value_taylor(X, U, gamma)
+    Vxx_ddp = compute_ddp_hessian(X, U, gamma)
+    Vxx_ilqr = compute_ilqr_hessian(X, U, gamma)
 
-    W = Czz + einsum(cu, KK, 't u, t u x1 x2 -> t x1 x2')
+    '''
+    line plot (variable theta)
+    '''
+    n_theta = 10000
+    theta_dot = xt[1]
 
-    H = fxx \
-        + einsum(fxu, K, 't x x1 u, t u x2 -> t x x1 x2') \
-        + einsum(K, fux, 't u x1, t x u x2 -> t x x1 x2') \
-        + einsum(K, fuu, K, 't u1 x1, t x u1 u2, t u2 x2 -> t x x1 x2') \
-        + einsum(fu, KK, 't x u, t u x1 x2 -> t x x1 x2')
+    # Create meshgrid
+    theta_grid = jnp.linspace(theta_min, theta_max, n_theta)
 
-    Vx = compute_cost_grad(dyn, xt, pi, pi_x, episode_len, gamma)
-    term = einsum(Vx[1:], H, 't x, t x x1 x2 -> t x1 x2')
+    grid_points = jnp.stack([
+        theta_grid,
+        jnp.repeat(theta_dot, n_theta)
+    ], axis = -1)
 
-    Vxx = jnp.zeros((dyn.state_dim, dyn.state_dim))
-    Vxx_hist = [jnp.trace(Vxx).item()]
+    delta_x = (grid_points - xt)
 
-    for t in reversed(range(episode_len)):
-        Vxx = gamma * D[t].T @ Vxx @ D[t] + gamma * term[t] + W[t]
-        Vxx_hist.insert(0, jnp.trace(Vxx).item())
-        print(jnp.trace(Vxx))
+    V_approx = V_bar[0] + delta_x @ Vx[0] + 0.5 * einsum(delta_x, Vxx[0], delta_x, 'b x1, x1 x2, b x2 -> b')
+    V_approx_ddp = V_bar[0] + delta_x @ Vx[0] + 0.5 * einsum(delta_x, Vxx_ddp[0], delta_x, 'b x1, x1 x2, b x2 -> b')
+    V_approx_ilqr = V_bar[0] + delta_x @ Vx[0] + 0.5 * einsum(delta_x, Vxx_ilqr[0], delta_x, 'b x1, x1 x2, b x2 -> b')
+    V = jax.vmap(cost_to_go)(grid_points)[:, 0]
 
-    # print(Vxx_hist)
-    # fig, ax = plt.subplots(1, 1)
-    # ax.plot(Vxx_hist)
-    # plt.show()
-
-    print(Vxx)
-
-    # scalar value at t=0 (must use same pi as unroll_policy)
-    V0_fun = lambda x: compute_cost_to_go(dyn, x, pi, episode_len, gamma)
-
-    # autodiff / exact Hessian from JAX
-    # Vxx_fd = jax.hessian(V0_fun)(xt)   # or jax.jacfwd(jax.grad(V0_fun))(xt)
-    Vx_fd = jax.jacfwd(V0_fun)
-    Vxx_fd = jax.jacfwd(Vx_fd)
-    print(Vxx_fd(xt))
+    fig, ax = plt.subplots(1, 1)
+    ax.plot(theta_grid, jnp.log(jnp.abs(V_approx - V)), label = 'True Hessian')
+    ax.plot(theta_grid, jnp.log(jnp.abs(V_approx_ddp - V)), label = 'DDP Hessian')
+    ax.plot(theta_grid, jnp.log(jnp.abs(V_approx_ilqr - V)), label = 'iLQR Hessian')
+    ax.legend()
+    plt.show()
 
 
+    fig, ax = plt.subplots(1, 1)
+    ax.set_title(f'Value Function Landscape for ' + r'$\dot\theta = $' + f'{xt[1]} (rad/s)')
+    ax.set_xlabel(r'$\theta$ (rad)')
+
+    ax.set_ylabel('Value')
+    # ax.set_xlim(theta_min, theta_max)
+    ax.set_ylim(V.min(), V.max())
+
+    ax.scatter(xt[0], V_bar[0], c = 'black', label = 'Expansion Point', s = 10)
+    ax.plot(theta_grid, V, label = 'Value')
+    ax.plot(theta_grid, V_approx, label = 'True Hessian', color = 'red')
+    ax.plot(theta_grid, V_approx_ddp, label = 'DDP Hessian', color = 'orange')
+    ax.plot(theta_grid, V_approx_ilqr, label = 'iLQR Hessian', color = 'purple')
+
+    ax.legend()
+    # fig.savefig(f'theta={xt[0].item()}_theta-dot={xt[1].item()}.png', dpi = 300)
+    fig.savefig('test.png', dpi = 300)
+    plt.show()
 
 
 
+    '''
+    heatmap
+    '''
+    # theta_min, theta_max = -1.52, -1.5
+    # theta_dot_min, theta_dot_max = -1.52, -1.5
 
-    # n_theta = 100
-    # n_theta_dot = 100
+    # theta_min, theta_max = -2 * jnp.pi, 2 * jnp.pi
+    # theta_dot_min, theta_dot_max = -2 * jnp.pi, 2 * jnp.pi
+
+    # n_theta = 200
+    # n_theta_dot = 200
     # # Create meshgrid
-    # theta_grid = jnp.linspace(-3 * jnp.pi, 3 * jnp.pi, n_theta)
-    # theta_dot_grid = jnp.linspace(-8, 8, n_theta_dot)
+    # theta_grid = jnp.linspace(theta_min, theta_max, n_theta)
+    # theta_dot_grid = jnp.linspace(theta_dot_min, theta_dot_max, n_theta_dot)
     # Theta, Theta_dot = jnp.meshgrid(theta_grid, theta_dot_grid)
     # grid_points = jnp.stack([Theta.ravel(), Theta_dot.ravel()], axis=1)
 
-    # G = jax.vmap(compute_cost_to_go, in_axes = (None, 0, None, None, None))(dyn, grid_points, pi, episode_len, gamma)
-    # G = G.reshape(n_theta_dot, n_theta)
-
-    # Gx = jax.vmap(compute_cost_grad, in_axes = (None, 0, None, None, None, None))(dyn, grid_points, pi, pi_x, episode_len, gamma)
-    # Gx = Gx.reshape(n_theta_dot, n_theta, dyn.state_dim)
+    # V = jax.vmap(cost_to_go)(grid_points)[:, 0]
+    # V = V.reshape(n_theta_dot, n_theta)
 
     # fig, ax = plt.subplots(1, 1, figsize = (8, 7))  # Adjust size as needed (7,7) works well for 300 DPI
 
     # im = ax.imshow(
-    #     G,
-    #     extent = [-3 * jnp.pi, 3 * jnp.pi, -8, 8],
+    #     V,
+    #     extent = [theta_min, theta_max, theta_dot_min, theta_dot_max],
     #     origin = 'lower',
     #     cmap = 'viridis',
     #     aspect = 'auto'  # Let imshow handle aspect; we'll enforce squareness via figure size
     # )
-
-    # # step =   # thinning factor for arrows
-    # scale = 0.3
-    # # vec = Gx[::step, ::step]
-    # vec = Gx
-    # norm = jnp.linalg.norm(vec, axis=-1, keepdims=True) + 1e-8
-    # vec_unit = vec / norm
-    # # ax.quiver(Theta[::step,::step], Theta_dot[::step,::step],
-    # #         -scale * vec_unit[...,0], - scale * vec_unit[...,1],
-    # #         color='white', alpha = 0.8, scale = 20)
-    # ax.quiver(Theta, Theta_dot,
-    #     -scale * vec_unit[...,0], - scale * vec_unit[...,1],
-    #     color = 'white', alpha = 0.8, scale = 20)
 
     # ax.set_xlabel(r'$\theta$ (rad)')
     # ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
@@ -204,4 +178,59 @@ if __name__ == '__main__':
 
     # # Save as square high-res image
     # fig.savefig('explicity_value.png', dpi = 300, bbox_inches = 'tight', pad_inches = 0.1)
+    # plt.show()
+
+
+    # '''
+    # 3d plot
+    # '''
+    # import jax
+    # import jax.numpy as jnp
+    # import matplotlib
+    # matplotlib.use('TkAgg')
+    # import matplotlib.pyplot as plt
+    # from mpl_toolkits.mplot3d import Axes3D  # Needed for 3D plotting
+
+    # n_theta = 100
+    # n_theta_dot = 100
+
+    # theta_min, theta_max = -0.49 * jnp.pi, -0.45 * jnp.pi
+    # theta_dot_min, theta_dot_max = -0.49 * jnp.pi, -0.40 * jnp.pi
+
+    # # Create meshgrid
+    # theta_grid = jnp.linspace(theta_min, theta_max, n_theta)
+    # theta_dot_grid = jnp.linspace(theta_dot_min, theta_dot_max, n_theta_dot)
+    # Theta, Theta_dot = jnp.meshgrid(theta_grid, theta_dot_grid)
+    # grid_points = jnp.stack([Theta.ravel(), Theta_dot.ravel()], axis=1)
+
+    # # Compute cost-to-go
+    # G = jax.vmap(compute_cost_to_go, in_axes=(None, 0, None, None, None))(dyn, grid_points, pi, episode_len, gamma)
+    # G = G.reshape(n_theta_dot, n_theta)
+
+    # # Create 3D figure
+    # fig = plt.figure(figsize=(10, 8))
+    # ax = fig.add_subplot(111, projection = '3d')
+
+    # # Plot surface
+    # surf = ax.plot_surface(
+    #     Theta, Theta_dot, G,
+    #     cmap='viridis',
+    #     edgecolor='none',
+    #     rstride = 1,
+    #     cstride = 1
+    # )
+
+    # # Labels and title
+    # ax.set_xlabel(r'$\theta$ (rad)')
+    # ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
+    # ax.set_zlabel('Value')
+    # ax.set_title('Explicit Value for Pendulum-v1')
+
+    # # Add colorbar
+    # fig.colorbar(surf, shrink=0.7, aspect=15, label='Value')
+
+    # # Optional: adjust viewing angle
+    # ax.view_init(elev = 30, azim = 45)
+
+    # plt.tight_layout()
     # plt.show()

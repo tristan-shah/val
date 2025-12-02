@@ -9,17 +9,13 @@ import orbax.checkpoint as ocp
 from orbax.checkpoint import CheckpointManager
 import matplotlib.pyplot as plt
 
-from val import Dynamics
+from val import Dynamics, unroll_policy
+from val.pendulum import normalize_pendulum_state, pendulum_cost
 
-from train import build_pendulum_critic, build_pendulum_policy, normalize_pendulum_state, pendulum_reward
-from controlled_lyapunov_exponents import unroll_policy
+from train import build_pendulum_critic, build_pendulum_policy
 
-@jax.jit
-def C(_x: Array, _u: Array):
-    return -pendulum_reward(_x, _u).squeeze()
-
-Cx = jax.jacrev(C, argnums = 0)
-Cu = jax.jacrev(C, argnums = 1)
+Cx = jax.jacrev(pendulum_cost, argnums = 0)
+Cu = jax.jacrev(pendulum_cost, argnums = 1)
 Cxx = jax.jacrev(Cx, argnums = 0)
 Cux = jax.jacrev(Cu, argnums = 0)
 Cxu = jax.jacrev(Cx, argnums = 1)

@@ -1,4 +1,4 @@
-import os
+# import os
 # os.environ['MUJOCO_GL'] = 'egl'
 from typing import Optional
 
@@ -108,35 +108,65 @@ class Dynamics:
         writer.close()
         return None
     
-def unroll(dyn: Dynamics, xt: Array, U: Array):
-    '''
-    Jax compatable simulation loop.
-    '''
+# def unroll(dyn: Dynamics, xt: Array, U: Array):
+#     '''
+#     Jax compatable simulation loop.
+#     '''
 
-    def body_fun(xt_: Array, ut_: Array):
-        xt_next = dyn.step(xt_, ut_)
-        return xt_next, xt_next
+#     def body_fun(xt_: Array, ut_: Array):
+#         xt_next = dyn.step(xt_, ut_)
+#         return xt_next, xt_next
     
-    _, X = jax.lax.scan(body_fun, xt, U)
-    return jnp.concatenate([xt[None, :], X])
+#     _, X = jax.lax.scan(body_fun, xt, U)
+#     return jnp.concatenate([xt[None, :], X])
 
-## jit compilation of the unroll function
-unroll = jax.jit(unroll, static_argnums = 0)
+# ## jit compilation of the unroll function
+# unroll = jax.jit(unroll, static_argnums = 0)
 
-def unroll_policy(dyn: Dynamics, xt: Array, pi: callable, T: int):
-    '''
-    Unroll a trajectory using a policy for T steps.
-    dyn, policy, and T must all be static (Python objects or integers).
-    '''
-    def body_fun(carry, _):
-        xt_ = carry
-        ut_ = pi(xt_)
-        xt_next = dyn.step(xt_, ut_)
-        return xt_next, (xt_next, ut_)
+# def unroll_policy(dyn: Dynamics, xt: Array, pi: callable, T: int):
+#     '''
+#     Unroll a trajectory using a policy for T steps.
+#     dyn, policy, and T must all be static (Python objects or integers).
+#     '''
+#     def body_fun(carry, _):
+#         xt_ = carry
+#         ut_ = pi(xt_)
+#         xt_next = dyn.step(xt_, ut_)
+#         return xt_next, (xt_next, ut_)
 
-    _, (X, U) = jax.lax.scan(body_fun, xt, xs=None, length=T)
-    X = jnp.concatenate([xt[None, :], X], axis=0)
-    return X, U
+#     _, (X, U) = jax.lax.scan(body_fun, xt, xs=None, length=T)
+#     X = jnp.concatenate([xt[None, :], X], axis=0)
+#     return X, U
 
-# Mark dyn, policy, and T as static
-unroll_policy = jax.jit(unroll_policy, static_argnums=(0, 2, 3))
+# # Mark dyn, policy, and T as static
+# unroll_policy = jax.jit(unroll_policy, static_argnums=(0, 2, 3))
+
+def make_step(dyn: Dynamics):
+
+    model = dyn.mjx_model
+    data_template = mjx.make_data(model)
+    nq = dyn.nq
+
+    def step(xt: Array, ut: Array):
+        qpos, qvel = split_state(xt, nq)
+        data = data_template.replace(qpos = qpos, qvel = qvel, ctrl = ut)
+        data = mjx.step(model, data)
+        return get_state(data)
+    
+    return jax.jit(step)
+
+def make_unroll_policy(step: callable, pi: callable, T: int):
+    
+    def unroll_policy(xt: Array):
+
+        def body_fn(_xt: Array, _):
+            _ut = pi(_xt)
+            _xt = step(_xt, _ut)
+            return _xt, (_xt, _ut)
+        
+        _, (X, U) = jax.lax.scan(body_fn, xt, length = T)
+        X = jnp.concatenate([xt[None, :], X], axis = 0)
+
+        return X, U
+    
+    return jax.jit(unroll_policy)

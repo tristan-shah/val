@@ -1,11 +1,9 @@
-import os
 from pathlib import Path
 from copy import deepcopy
 
 import jax
 from jax import Array
 from jax import numpy as jnp
-import flax
 from flax import nnx
 import flashbax as fbx
 from flashbax.buffers.flat_buffer import TransitionSample
@@ -13,10 +11,8 @@ import chex
 import optax
 import orbax.checkpoint as ocp
 
-
-
-from val import Dynamics
-from val.utils import smooth_angle_wrap
+from val import Dynamics, make_step
+from val.pendulum import init_pendulum_state, normalize_pendulum_state, pendulum_reward
 
 def build_pendulum_critic(state_dim: int, act_dim:int, h_dim: int, rngs: nnx.Rngs):
 
@@ -59,29 +55,6 @@ def soft_update(model, target_model, tau=0.005):
 
     nnx.update(target_model, new_state)
     return target_model
-
-@jax.jit
-def init_pendulum_state(key):
-    xt = jax.random.uniform(key, shape = 2) * 2 - 1
-    xt = xt * jnp.array([jnp.pi, 1.0])
-    return xt
-
-@jax.jit
-def normalize_pendulum_state(xt: Array, max_vel: float = 3 * jnp.pi):
-    '''
-    Takes the raw mujoco state and normalizes angles and velocities.
-    '''
-    return jnp.stack([jnp.cos(xt[0]), jnp.sin(xt[0]), xt[1] / max_vel])
-
-@jax.jit
-def pendulum_reward(xt: Array, ut: Array):
-    theta = xt[0]
-    theta_dot = xt[1]
-    angle_cost = smooth_angle_wrap(theta - jnp.pi) ** 2
-    vel_cost = 0.1 * theta_dot ** 2
-    act_cost = 0.5 * ut ** 2
-    
-    return -(angle_cost + vel_cost + act_cost)
 
 @chex.dataclass(frozen = True)
 class SART:
@@ -139,6 +112,14 @@ def update_policy(critic, policy, policy_opt, experience: TransitionSample):
 
     return loss
 
+def make_value(policy: callable, critic: callable, normalize: callable):
+
+    def value(_x: Array):
+        z = normalize(_x)
+        return -critic(jnp.concatenate([z, policy(z)], axis = -1)).squeeze()
+    
+    return jax.jit(value)
+
 if __name__ == '__main__':
     ## hyperparameters
     seed = 105
@@ -176,17 +157,22 @@ if __name__ == '__main__':
     ## load in xml
     xml_path = 'xml/pendulum.xml'
     dyn = Dynamics(path = xml_path, dt = dt)
+
+    step = make_step(dyn)
+
     low = dyn.mjx_model.actuator_ctrlrange[:, 0]
     high = dyn.mjx_model.actuator_ctrlrange[:, 1]
     
     ## build networks
     critic = build_pendulum_critic(3, dyn.control_dim, h_dim, rngs)
     policy = build_pendulum_policy(3, dyn.control_dim, h_dim, rngs)
+    
     target_critic = deepcopy(critic)
     target_policy = deepcopy(policy)
     pi = lambda _x: policy(normalize_pendulum_state(_x))
 
-    path = Path(f'checkpoints/num_env={num_env}_vec_ddpg').resolve()
+    # path = Path(f'checkpoints/num_env={num_env}_vec_ddpg').resolve()
+    path = Path(f'checkpoints/TEST').resolve()
 
     ## Create a checkpointer
     options = ocp.CheckpointManagerOptions(

@@ -8,8 +8,6 @@ import orbax.checkpoint as ocp
 from orbax.checkpoint import CheckpointManager
 import matplotlib.pyplot as plt
 
-from val import Dynamics, unroll
-
 from train import build_pendulum_critic, build_pendulum_policy, normalize_pendulum_state
 
 if __name__ == '__main__':
@@ -35,11 +33,9 @@ if __name__ == '__main__':
         return -critic(jnp.concatenate([z, policy(z)], axis = -1)).squeeze()
     
     Vx = jax.jacrev(V)
-    Vxx = jax.jacrev(Vx)
 
     V = jax.jit(V)
     Vx = jax.jit(Vx)
-    Vxx = jax.jit(Vxx)
 
     # Create a grid over theta and theta_dot
     n_theta = 100
@@ -53,28 +49,21 @@ if __name__ == '__main__':
 
     ## evaluate value function
     v = jax.vmap(V)(grid_points)
-    vx = jax.vmap(Vx)(grid_points)
-    print(v.shape)
-    print(vx.shape)
-
-    ## evaluate laplacian of value function
-    laplacian = jnp.trace(jax.vmap(Vxx)(grid_points), axis1 = 1, axis2 = 2)
-    laplacian = laplacian.clip(-50, 50)
+    # vx = jax.vmap(Vx)(grid_points)
 
     ## Reshape Q-values to grid
-    # v_grid = v.reshape(n_theta_dot, n_theta)
+    v_grid = v.reshape(n_theta_dot, n_theta)
     # vx_grid = vx.reshape(n_theta_dot, n_theta, 2)
-    laplacian_grid = laplacian.reshape(n_theta_dot, n_theta)
 
-    fig, ax = plt.subplots(1, 1, figsize = (8, 7))  # Adjust size as needed (7,7) works well for 300 DPI
+    fig, ax = plt.subplots(1, 1, figsize = (8, 7))
 
     im = ax.imshow(
-        # v_grid,
-        laplacian_grid, 
+        v_grid,
+        # laplacian_grid, 
         extent = [-3 * jnp.pi, 3 * jnp.pi, -8, 8],
         origin = 'lower',
         cmap = 'viridis',
-        aspect = 'auto'  # Let imshow handle aspect; we'll enforce squareness via figure size
+        aspect = 'auto' 
     )
 
     # step = 4  # thinning factor for arrows
@@ -94,18 +83,14 @@ if __name__ == '__main__':
 
     ax.set_xlabel(r'$\theta$ (rad)')
     ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
-    # ax.set_title('Learned Value for Pendulum-v1')
-    ax.set_title('Laplacian for Pendulum-v1')
+    ax.set_title('Learned Value for Pendulum-v1')
 
     # Add colorbar (placed nicely on the side)
     cbar = fig.colorbar(im, ax = ax, shrink = 0.8, pad = 0.05)
-    # cbar.ax.set_ylabel('Value', rotation = 270, labelpad = 15)
-    cbar.ax.set_ylabel('Laplacian', rotation = 270, labelpad = 15)
+    cbar.ax.set_ylabel('Value', rotation = 270, labelpad = 15)
 
-    # Optional: tighten layout but prevent colorbar from being cropped
     fig.tight_layout()
 
     # Save as square high-res image
-    # fig.savefig('value.png', dpi = 300, bbox_inches = 'tight', pad_inches = 0.1)
-    fig.savefig('laplacian.png', dpi = 300, bbox_inches = 'tight', pad_inches = 0.1)
+    fig.savefig('value.png', dpi = 300, bbox_inches = 'tight', pad_inches = 0.1)
     plt.show()
