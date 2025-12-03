@@ -5,55 +5,57 @@ from jax import Array
 from jax import numpy as jnp
 from flax import nnx
 import orbax.checkpoint as ocp
-from orbax.checkpoint import CheckpointManager
 import matplotlib.pyplot as plt
 
-from train import build_pendulum_critic, build_pendulum_policy, normalize_pendulum_state
+from val.pendulum import normalize_pendulum_state
+from ddpg.main import DDPG
 
 if __name__ == '__main__':
+    seed = 105
+    rngs = nnx.Rngs(seed)
+    key = jax.random.PRNGKey(seed)
+    episode_len = 400
+    dt = 0.05
 
-    path = Path('checkpoints/vec_ddpg').resolve()
-    manager = CheckpointManager(path)
+    state_dim = 3
+    ctrl_dim = 1
+    hidden_dim = 128
+    num_layers_critic = 4
+    num_layers_policy = 2
+    activation = nnx.gelu
+    critic_lr = 1e-3
+    policy_lr = 1e-4
+    gamma = 0.99
 
-    critic = build_pendulum_critic(3, 1, 128, rngs = nnx.Rngs(0))
-    policy = build_pendulum_policy(3, 1, 128, rngs = nnx.Rngs(0))
+    path = Path('checkpoints/grad_TEST_penalty=0.01').resolve()
+    manager = ocp.CheckpointManager(path)
+    
+    ddpg = DDPG(rngs, normalize_pendulum_state, state_dim, ctrl_dim, hidden_dim, num_layers_critic, num_layers_policy, activation, critic_lr, policy_lr, gamma)
 
-    restored = manager.restore(39900,
-        args = ocp.args.Composite(
-            critic_state = ocp.args.StandardRestore(nnx.state(critic)),
-            policy_state = ocp.args.StandardRestore(nnx.state(policy))
-        )
-    )
-
-    nnx.update(critic, restored['critic_state'])
-    nnx.update(policy, restored['policy_state'])
+    ddpg_state = manager.restore(39900, args = ocp.args.StandardRestore(nnx.state(ddpg)))
+    nnx.update(ddpg, ddpg_state)
 
     def V(_x: Array):
-        z = normalize_pendulum_state(_x)
-        return -critic(jnp.concatenate([z, policy(z)], axis = -1)).squeeze()
+        z = ddpg.normalize_state(_x)
+        return -ddpg.critic(z, ddpg.policy(z)).squeeze()
     
-    Vx = jax.jacrev(V)
-
     V = jax.jit(V)
-    Vx = jax.jit(Vx)
 
     # Create a grid over theta and theta_dot
-    n_theta = 100
-    n_theta_dot = 100
+    n_theta = 200
+    n_theta_dot = 200
 
     # Create meshgrid
     theta_grid = jnp.linspace(-3 * jnp.pi, 3 * jnp.pi, n_theta)
     theta_dot_grid = jnp.linspace(-8, 8, n_theta_dot)
     Theta, Theta_dot = jnp.meshgrid(theta_grid, theta_dot_grid)
-    grid_points = jnp.stack([Theta.ravel(), Theta_dot.ravel()], axis=1)
+    grid_points = jnp.stack([Theta.ravel(), Theta_dot.ravel()], axis = 1)
 
     ## evaluate value function
     v = jax.vmap(V)(grid_points)
-    # vx = jax.vmap(Vx)(grid_points)
 
     ## Reshape Q-values to grid
     v_grid = v.reshape(n_theta_dot, n_theta)
-    # vx_grid = vx.reshape(n_theta_dot, n_theta, 2)
 
     fig, ax = plt.subplots(1, 1, figsize = (8, 7))
 
@@ -65,21 +67,6 @@ if __name__ == '__main__':
         cmap = 'viridis',
         aspect = 'auto' 
     )
-
-    # step = 4  # thinning factor for arrows
-    # scale = 0.3
-    # # vec = vx_grid[::step, ::step]
-    # vec = vx_grid
-    # norm = jnp.linalg.norm(vec, axis=-1, keepdims=True) + 1e-8
-    # vec_unit = vec / norm
-    # ax.quiver(Theta[::step,::step], Theta_dot[::step,::step],
-    #         -scale * vec_unit[...,0], - scale * vec_unit[...,1],
-    #         color='white', alpha = 0.8, scale = 20)
-    
-    # ax.quiver(Theta, Theta_dot,
-    #     -scale * vec_unit[...,0], - scale * vec_unit[...,1],
-    #     color='white', alpha = 0.8, scale = 20)
-
 
     ax.set_xlabel(r'$\theta$ (rad)')
     ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
