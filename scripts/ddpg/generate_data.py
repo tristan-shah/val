@@ -79,10 +79,11 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(seed)
 
     ## buffer parameters
-    iterations = 100
+    iterations = 10
     num_env = 1000
     episode_len = 400
     buffer_len = iterations * num_env * episode_len
+    batch_size = 128 ## dummy argument for sampling
     print(f'Buffer Length = {buffer_len}')
 
     dt = 0.05
@@ -103,8 +104,6 @@ if __name__ == '__main__':
     policy_lr = 1e-4
     gamma = 0.99
     tau = 0.005
-
-    batch_size = 128
 
     ## load in pretrained ddpg
     path = Path(f'checkpoints/hidden_dim={hidden_dim}-num_layers_critic={num_layers_critic}-grad_penalty=0.0-hess_penalty=0.0').resolve()
@@ -144,30 +143,39 @@ if __name__ == '__main__':
 
     ## initialize replay buffer with dummy transition
     buffer_state = buffer.init(sart)
-    print(type(buffer_state))
 
-    # for i in range(iterations):
-    #     key, subkey = jax.random.split(key)
-    #     ## initialize a random batch of states
-    #     batch_key = jax.random.split(key, num_env)
-    #     x = batch_init_state(batch_key)
+    for _ in range(iterations):
+        key, subkey = jax.random.split(key)
+        ## initialize a random batch of states
+        batch_key = jax.random.split(key, num_env)
+        x = batch_init_state(batch_key)
 
-    #     done = jnp.zeros((num_env, 1), dtype = jnp.bool)
+        done = jnp.zeros((num_env, 1), dtype = jnp.bool)
 
-    #     for t in range(episode_len):
-    #         u = batch_pi(x)
-    #         c = batch_cost(x, u)[:, None]
-    #         x_next = batch_step(x, u)
+        for i in range(episode_len):
 
-    #         ## check if episode is done
-    #         done = done.at[:].set(jnp.bool(i == episode_len - 1))
+            u = batch_pi(x)
+            c = batch_cost(x, u)[:, None]
+            x_next = batch_step(x, u)
 
-    #         ## store transition
-    #         sart = SART(s = x,  a = u, r = c, t = done)
-    #         buffer_state = buffer.add(buffer_state, sart)
+            ## check if episode is done
+            done = done.at[:].set(jnp.bool(i == episode_len - 1))
 
-    #         ## overwrite previous state
-    #         x = x_next
+            ## store transition
+            sart = SART(s = x,  a = u, r = c, t = done)
+            buffer_state = buffer.add(buffer_state, sart)
 
-    #         print(t)
-    #         # exit()
+            ## overwrite previous state
+            x = x_next
+
+        print(f'Iteration = {i}')
+
+    # === SAVE THE BUFFER ===
+    save_dir = Path('buffers/pendulum_ddpg_dataset').resolve()
+    save_dir.mkdir(parents = True, exist_ok = True)
+
+    checkpointer = ocp.CheckpointManager(save_dir)
+
+    checkpointer.save(0, args = ocp.args.StandardSave(buffer_state))
+    checkpointer.close()
+    print(f'Offline dataset saved to {save_dir}')
