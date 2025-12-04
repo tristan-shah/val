@@ -149,7 +149,6 @@ if __name__ == '__main__':
     z = jax.vmap(normalize_pendulum_state)(grid_points)
     V_learned = jax.vmap(value)(z)
 
-
     fig, ax = plt.subplots(1, 1)
     ax.set_title(f'Value Function Landscape for ' + r'$\dot\theta = $' + f'{theta_dot} (rad/s)')
     ax.set_xlabel(r'$\theta$ (rad)')
