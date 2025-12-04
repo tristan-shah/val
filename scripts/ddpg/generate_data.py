@@ -6,13 +6,14 @@ from jax import Array
 from jax import numpy as jnp
 from einops import einsum
 from flax import nnx
+import flashbax as fbx
 import optax
 import orbax.checkpoint as ocp
 import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step
 from val.pendulum import init_pendulum_state, normalize_pendulum_state, pendulum_cost
-from val.ddpg import DDPG, Policy, build_hidden_layers, soft_update
+from val.ddpg import SART, DDPG, Policy, build_hidden_layers, soft_update
 
 class Value(nnx.Module):
     def __init__(
@@ -77,12 +78,19 @@ if __name__ == '__main__':
     rngs = nnx.Rngs(seed)
     key = jax.random.PRNGKey(seed)
 
+    ## buffer parameters
+    iterations = 100
+    num_env = 1000
     episode_len = 400
+    buffer_len = iterations * num_env * episode_len
+    print(f'Buffer Length = {buffer_len}')
+
     dt = 0.05
     ## load in xml
-    xml_path = 'xml/pendulum.xml'
-    dyn = Dynamics(path = xml_path, dt = dt)
+    dyn = Dynamics(path = 'xml/pendulum.xml', dt = dt)
     step = make_step(dyn)
+    batch_step = jax.jit(jax.vmap(step))
+    batch_init_state = jax.jit(jax.vmap(init_pendulum_state))
     input_dim = len(normalize_pendulum_state(init_pendulum_state(key))) ## get the shape of the normalized state
     ctrl_dim = dyn.control_dim
 
@@ -96,6 +104,8 @@ if __name__ == '__main__':
     gamma = 0.99
     tau = 0.005
 
+    batch_size = 128
+
     ## load in pretrained ddpg
     path = Path(f'checkpoints/hidden_dim={hidden_dim}-num_layers_critic={num_layers_critic}-grad_penalty=0.0-hess_penalty=0.0').resolve()
     manager = ocp.CheckpointManager(path)
@@ -103,59 +113,61 @@ if __name__ == '__main__':
     ddpg_state = manager.restore(39900, args = ocp.args.StandardRestore(nnx.state(ddpg)))
     nnx.update(ddpg, ddpg_state)
     policy = ddpg.policy
+    pi = lambda _x: policy(normalize_pendulum_state(_x))
+    batch_pi = jax.jit(jax.vmap(pi))
+    batch_cost = jax.jit(jax.vmap(pendulum_cost))
 
-    value = Value(rngs, input_dim, hidden_dim = 256, num_layers = 10, activation = nnx.gelu)
-    target_value = nnx.clone(value)
-    value_opt = nnx.Optimizer(value, optax.adam(1e-3))
+    ## instantiating the buffer
+    buffer = fbx.make_flat_buffer(
+        max_length = buffer_len,
+        min_length = batch_size,
+        sample_batch_size = batch_size,
+        add_batch_size = num_env
+    )
 
-    update_value = make_update_value(policy, step, pendulum_cost, normalize_pendulum_state, gamma)
 
-    key, subkey = jax.random.split(key)
-    batch_size = 1024
+    ## jit compiling buffer functions
+    buffer = buffer.replace(
+        init = jax.jit(buffer.init),
+        add = jax.jit(buffer.add, donate_argnums = 0),
+        sample = jax.jit(buffer.sample),
+        can_sample = jax.jit(buffer.can_sample),
+    )
 
-    batch_init_state = jax.vmap(init_pendulum_state)
+    ## create dummy transition
+    sart = SART(
+        s = jnp.zeros(dyn.state_dim), 
+        a = jnp.zeros(dyn.control_dim),
+        r = jnp.zeros(1),
+        t = jnp.zeros(1, dtype = bool)
+    )
 
-    loss_hist = []
+    ## initialize replay buffer with dummy transition
+    buffer_state = buffer.init(sart)
+    print(type(buffer_state))
 
-    for i in range(100000):
-        key, subkey = jax.random.split(key)
-        ## initialize a random batch of states
-        batch_key = jax.random.split(key, batch_size)
-        x = batch_init_state(batch_key)
-        loss = update_value(value, target_value, value_opt, x)
-        target_value = soft_update(value, target_value, tau)
-        print(i, loss)
-        loss_hist.append(loss)
+    # for i in range(iterations):
+    #     key, subkey = jax.random.split(key)
+    #     ## initialize a random batch of states
+    #     batch_key = jax.random.split(key, num_env)
+    #     x = batch_init_state(batch_key)
 
-    fig, ax = plt.subplots(1, 1)
-    ax.plot(loss_hist)
-    fig.savefig('loss.png', dpi = 300)
+    #     done = jnp.zeros((num_env, 1), dtype = jnp.bool)
 
-    '''
-    line plot (variable theta)
-    '''
-    n_theta = 10000
-    theta_dot = 2.0
-    theta_min, theta_max = -2 * jnp.pi, 2.0 * jnp.pi
+    #     for t in range(episode_len):
+    #         u = batch_pi(x)
+    #         c = batch_cost(x, u)[:, None]
+    #         x_next = batch_step(x, u)
 
-    # Create meshgrid
-    theta_grid = jnp.linspace(theta_min, theta_max, n_theta)
+    #         ## check if episode is done
+    #         done = done.at[:].set(jnp.bool(i == episode_len - 1))
 
-    grid_points = jnp.stack([
-        theta_grid,
-        jnp.repeat(theta_dot, n_theta)
-    ], axis = -1)
+    #         ## store transition
+    #         sart = SART(s = x,  a = u, r = c, t = done)
+    #         buffer_state = buffer.add(buffer_state, sart)
 
-    z = jax.vmap(normalize_pendulum_state)(grid_points)
-    V_learned = jax.vmap(value)(z)
+    #         ## overwrite previous state
+    #         x = x_next
 
-    fig, ax = plt.subplots(1, 1)
-    ax.set_title(f'Value Function Landscape for ' + r'$\dot\theta = $' + f'{theta_dot} (rad/s)')
-    ax.set_xlabel(r'$\theta$ (rad)')
-    ax.set_ylabel('Value')
-    ax.plot(theta_grid, V_learned, label = 'Learned Value')
-
-    ax.legend()
-    fig.savefig('test.png', dpi = 300)
-    plt.show()
-
+    #         print(t)
+    #         # exit()
