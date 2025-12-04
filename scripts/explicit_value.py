@@ -10,31 +10,36 @@ import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step, make_unroll_policy
 
-from val.pendulum import normalize_pendulum_state, pendulum_cost
+from val.pendulum import init_pendulum_state, normalize_pendulum_state, pendulum_cost
 from val.utils import make_compute_value, make_compute_value_grad, make_compute_value_taylor, make_compute_ddp_hessian, make_compute_ilqr_hessian
-from val.ddpg import DDPG
 
+from val.ddpg import DDPG
 if __name__ == '__main__':
     seed = 105
     rngs = nnx.Rngs(seed)
     key = jax.random.PRNGKey(seed)
+
     episode_len = 400
     dt = 0.05
+    ## load in xml
+    xml_path = 'xml/pendulum.xml'
+    dyn = Dynamics(path = xml_path, dt = dt)
+    step = make_step(dyn)
+    input_dim = len(normalize_pendulum_state(init_pendulum_state(key))) ## get the shape of the normalized state
+    ctrl_dim = dyn.control_dim
 
-    state_dim = 3
-    ctrl_dim = 1
     hidden_dim = 128
-    num_layers_critic = 8 #4
-    num_layers_policy = 2
+    num_layers_critic = 4
+    num_layers_policy = 1
     activation = nnx.gelu
     critic_lr = 1e-3
     policy_lr = 1e-4
     gamma = 0.99
 
-    path = Path('checkpoints/num_layers_critic=8-grad_penalty=0.01').resolve()
+    path = Path(f'checkpoints/hidden_dim={hidden_dim}-num_layers_critic={num_layers_critic}-grad_penalty=0.0-hess_penalty=0.0').resolve()
     manager = ocp.CheckpointManager(path)
 
-    ddpg = DDPG(rngs, normalize_pendulum_state, state_dim, ctrl_dim, hidden_dim, num_layers_critic, num_layers_policy, activation, critic_lr, policy_lr, gamma)
+    ddpg = DDPG(rngs, normalize_pendulum_state, input_dim, ctrl_dim, hidden_dim, num_layers_critic, num_layers_policy, activation, critic_lr, policy_lr, gamma)
 
     ddpg_state = manager.restore(39900, args = ocp.args.StandardRestore(nnx.state(ddpg)))
     nnx.update(ddpg, ddpg_state)
@@ -44,10 +49,6 @@ if __name__ == '__main__':
 
     ## make a policy
     pi = jax.jit(lambda _x: policy(normalize_pendulum_state(_x)))
-
-    ## load in dynamics
-    dyn = Dynamics(path = 'xml/pendulum.xml', dt = dt)
-    step = make_step(dyn)
 
     ## build functions
     unroll_policy = make_unroll_policy(step, pi, episode_len)
@@ -70,9 +71,9 @@ if __name__ == '__main__':
     
     ## select a state
     xt = jnp.zeros(dyn.state_dim)
-    xt = xt.at[0].set(1.0)
-    xt = xt.at[1].set(-2.0)
-    theta_min, theta_max = -2.0, 2.0
+    xt = xt.at[0].set(1.5)
+    xt = xt.at[1].set(2.0)
+    theta_min, theta_max = -2 * jnp.pi, 2.0 * jnp.pi
 
     # ## unroll a nominal
     # X, U = unroll_policy(xt)
@@ -135,8 +136,7 @@ if __name__ == '__main__':
     # ax.plot(theta_grid, V_approx_ilqr, label = 'iLQR Hessian', color = 'purple')
 
     ax.legend()
-    # fig.savefig(f'theta={xt[0].item()}_theta-dot={xt[1].item()}.png', dpi = 300)
-    fig.savefig('test.png', dpi = 300)
+    fig.savefig('explicit_value.png', dpi = 300)
     plt.show()
 
 
@@ -144,9 +144,6 @@ if __name__ == '__main__':
     '''
     heatmap
     '''
-    # theta_min, theta_max = -1.52, -1.5
-    # theta_dot_min, theta_dot_max = -1.52, -1.5
-
     # theta_min, theta_max = -2 * jnp.pi, 2 * jnp.pi
     # theta_dot_min, theta_dot_max = -2 * jnp.pi, 2 * jnp.pi
 
@@ -159,6 +156,7 @@ if __name__ == '__main__':
     # grid_points = jnp.stack([Theta.ravel(), Theta_dot.ravel()], axis=1)
 
     # V = jax.vmap(explicit_value)(grid_points)[:, 0]
+    # # V = jax.vmap(learned_value)(grid_points)
     # V = V.reshape(n_theta_dot, n_theta)
 
     # fig, ax = plt.subplots(1, 1, figsize = (8, 7))  # Adjust size as needed (7,7) works well for 300 DPI

@@ -1,9 +1,7 @@
 from pathlib import Path
 
 import jax
-from jax import Array
 from jax import numpy as jnp
-from einops import einsum
 from flax import nnx
 import flashbax as fbx
 import orbax.checkpoint as ocp
@@ -11,7 +9,9 @@ import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step
 from val.pendulum import init_pendulum_state, pendulum_reward, pendulum_cost, normalize_pendulum_state
-from val.ddpg import DDPG, SART, make_update_critic, update_policy, soft_update
+from val.ddpg import DDPG, SART, update_policy, soft_update
+
+from val.ddpg import make_update_critic, update_critic
 
 if __name__ == '__main__':
     seed = 0
@@ -25,9 +25,9 @@ if __name__ == '__main__':
     num_episodes = 100
 
     gamma = 0.99
-    hidden_dim = 256
-    num_layers_critic = 8#4
-    num_layers_policy = 2
+    hidden_dim = 128
+    num_layers_critic = 4
+    num_layers_policy = 1
     activation = nnx.gelu
     critic_lr = 1e-3
     policy_lr = 1e-4
@@ -35,28 +35,38 @@ if __name__ == '__main__':
     tau = 0.005
     exploration_noise = 0.1
 
-    grad_penalty = 0.01
+    # grad_penalty = 0.0001
+    # hess_penalty = 0.0001
+    grad_penalty = 0.0
+    hess_penalty = 0.0
 
     ## load in dynamics
     dyn = Dynamics(path = 'xml/pendulum.xml', dt = dt)
+    step = make_step(dyn)
+    batch_step = jax.vmap(step)
     low = dyn.mjx_model.actuator_ctrlrange[:, 0]
     high = dyn.mjx_model.actuator_ctrlrange[:, 1]
     input_dim = len(normalize_pendulum_state(init_pendulum_state(key))) ## get the shape of the normalized state
     ctrl_dim = dyn.control_dim
-    step = make_step(dyn)
-    batch_step = jax.vmap(step)
 
     ddpg = DDPG(rngs, normalize_pendulum_state, input_dim, ctrl_dim, hidden_dim, num_layers_critic, num_layers_policy, activation, critic_lr, policy_lr, gamma)
 
-    # ## fake batch
-    # x = jax.random.normal(key, (batch_size, dyn.state_dim))
-    # u = jax.random.normal(key, (batch_size, dyn.control_dim))
-    # r = jax.random.normal(key, (batch_size,))
-    # t = jnp.zeros((batch_size, 1))
-    # x_ = jax.random.normal(key, (batch_size, dyn.state_dim))
-    # batch = (x, u, r, t, x_)
-    
-    update_critic = make_update_critic(step, pendulum_cost, grad_penalty)
+    ## fake batch
+    x = jax.random.normal(key, (batch_size, dyn.state_dim))
+    u = jax.random.normal(key, (batch_size, dyn.control_dim))
+    r = jax.random.normal(key, (batch_size,))
+    t = jnp.zeros((batch_size, 1))
+    x_ = jax.random.normal(key, (batch_size, dyn.state_dim))
+    batch = (x, u, r, t, x_)
+
+    # ## make the critic update function
+    # update_critic = make_update_critic(
+    #     step, 
+    #     lambda _x, _u: jnp.squeeze(pendulum_reward(_x, _u)), 
+    #     grad_penalty,
+    #     hess_penalty
+    # )
+
 
     ## instantiating the buffer
     buffer = fbx.make_flat_buffer(
@@ -87,11 +97,13 @@ if __name__ == '__main__':
 
     critic_loss_hist = []
     critic_grad_loss_hist = []
+    critic_hess_loss_hist = []
     policy_loss_hist = []
     reward_hist = []
     step = 0
 
-    path = Path(f'checkpoints/hidden_dim={hidden_dim}-num_layers_critic={num_layers_critic}-grad_penalty={grad_penalty}').resolve()
+    path = Path(f'checkpoints/hidden_dim={hidden_dim}-num_layers_critic={num_layers_critic}-grad_penalty={grad_penalty}-hess_penalty={hess_penalty}').resolve()
+    path = Path(f'checkpoints/hidden_dim={hidden_dim}-num_layers_critic={num_layers_critic}-grad_penalty={grad_penalty}-hess_penalty={hess_penalty}').resolve()
 
     ## Create a checkpointer
     options = ocp.CheckpointManagerOptions(
@@ -153,7 +165,10 @@ if __name__ == '__main__':
                     data.experience.second.s
                 )
 
-                critic_loss, critic_grad_loss = update_critic(ddpg, batch)
+                # critic_loss, critic_grad_loss, critic_hess_loss = update_critic(ddpg, batch)
+                critic_loss = update_critic(ddpg, batch)
+                critic_grad_loss, critic_hess_loss = 0.0, 0.0
+
                 policy_loss = update_policy(ddpg, batch)
 
                 ## update targets
@@ -162,6 +177,7 @@ if __name__ == '__main__':
 
                 critic_loss_hist.append(critic_loss)
                 critic_grad_loss_hist.append(critic_grad_loss)
+                critic_hess_loss_hist.append(critic_hess_loss)
                 policy_loss_hist.append(policy_loss)
 
                 manager.save(step, 
@@ -181,7 +197,7 @@ if __name__ == '__main__':
     reward_mean = reward_hist.mean(axis = 0)
     reward_std = reward_hist.std(axis = 0)
     
-    fig, ax = plt.subplots(1, 4, figsize = (15, 5))
+    fig, ax = plt.subplots(1, 5, figsize = (15, 5))
     ax[0].set_title('Critic Loss')
     ax[0].plot(critic_loss_hist)
     
@@ -190,8 +206,11 @@ if __name__ == '__main__':
 
     ax[2].set_title('Critic Grad Loss')
     ax[2].plot(critic_grad_loss_hist)
+
+    ax[3].set_title('Critic Hess Loss')
+    ax[3].plot(critic_hess_loss_hist)
     
-    ax[3].set_title('Reward History')
-    ax[3].set_xlabel('Episode')
-    ax[3].plot(reward_mean)
+    ax[4].set_title('Reward History')
+    ax[4].set_xlabel('Episode')
+    ax[4].plot(reward_mean)
     fig.savefig('stats.png', dpi = 300)

@@ -116,37 +116,45 @@ class DDPG(nnx.Module):
         z = self.batch_normalize_state(x)
         return self.policy(z)
 
-# @nnx.jit
-# def update_critic(ddpg: DDPG, batch: tuple):
+@nnx.jit
+def update_critic(ddpg: DDPG, batch: tuple):
 
-#     ## extract experience
-#     x, u, r, t, x_ = batch
+    ## extract experience
+    x, u, r, t, x_ = batch
 
-#     ## normalize states
-#     z = ddpg.batch_normalize_state(x)
-#     z_ = ddpg.batch_normalize_state(x_)
+    ## normalize states
+    z = ddpg.batch_normalize_state(x)
+    z_ = ddpg.batch_normalize_state(x_)
 
-#     ## compute action in next state
-#     u_ = ddpg.target_policy(z_)
-#     v_ = ddpg.target_critic(z_, u_)
-#     ## compute Bellman TD target
-#     y = r + (1.0 - t) * ddpg.gamma * v_
+    ## compute action in next state
+    u_ = ddpg.target_policy(z_)
+    v_ = ddpg.target_critic(z_, u_)
+    ## compute Bellman TD target
+    y = r + (1.0 - t) * ddpg.gamma * v_
 
-#     def loss_fn(critic: Critic):
-#         ## compute values
-#         v = critic(z, u)
-#         return jnp.mean(optax.huber_loss(v, y))
+    def loss_fn(critic: Critic):
+        ## compute values
+        v = critic(z, u)
+        return jnp.mean(optax.huber_loss(v, y))
     
-#     loss, grads = nnx.value_and_grad(loss_fn)(ddpg.critic)
-#     ddpg.critic_opt.update(grads)
-#     return loss
+    loss, grads = nnx.value_and_grad(loss_fn)(ddpg.critic)
+    ddpg.critic_opt.update(grads)
+    return loss
 
 
-def make_update_critic(step: Callable, cost: Callable, grad_penalty: float):
+def make_update_critic(step: Callable, cost: Callable, grad_penalty: float, hess_penalty: float):
+
+    linearize_step = jax.jacfwd(step, argnums = (0, 1))
+    quadraticize_step = jax.jacfwd(linearize_step, argnums = (0, 1))
+
+    linearize_cost = jax.jacfwd(cost, argnums = (0, 1))
+    quadraticize_cost = jax.jacfwd(linearize_cost, argnums = (0, 1))
 
     batch_step = jax.jit(jax.vmap(step))
-    batch_linearize_step = jax.jit(jax.vmap(jax.jacfwd(step, argnums = (0, 1))))
-    batch_linearize_cost = jax.jit(jax.vmap(jax.jacfwd(cost, argnums = (0, 1))))
+    batch_linearize_step = jax.jit(jax.vmap(linearize_step))
+    batch_quadraticize_step = jax.jit(jax.vmap(quadraticize_step))
+    batch_linearize_cost = jax.jit(jax.vmap(linearize_cost))
+    batch_quadraticize_cost = jax.jit(jax.vmap(quadraticize_cost))
 
     @nnx.jit
     def update_critic(ddpg: DDPG, batch: tuple):
@@ -154,41 +162,81 @@ def make_update_critic(step: Callable, cost: Callable, grad_penalty: float):
         ## extract experience
         x, u, r, t, x_next = batch
 
+        gamma = ddpg.gamma
+
         ## construct a value function from the critic and policy
         def V(x_i: Array, C: Critic, P: Policy):
             z_i = ddpg.normalize_state(x_i)
             return C(z_i, P(z_i)).squeeze()
         
-        ## differentiate the value function and broadcast over batches
-        batch_Vx = jax.vmap(jax.jacrev(V), in_axes = (0, None, None))
-
         ## calculates the action in an individual state
         def pi(x_i: Array, P: Policy):
             return P(ddpg.normalize_state(x_i))
         
-        ## broadcast policy over batches
-        batch_pi = jax.vmap(pi, in_axes = (0, None))
-        ## differentiate the policy and broadcast over batches
-        batch_pi_x = jax.vmap(jax.jacfwd(pi), in_axes = (0, None))
+        ## differentiate the value function and broadcast over batches
+        Vx = jax.jacrev(V)
+        Vxx = jax.jacrev(Vx)
+        batch_Vx = jax.vmap(Vx, in_axes = (0, None, None))
+        batch_Vxx = jax.vmap(Vxx, in_axes = (0, None, None))
 
-        ## compute the target to regress Vx upon
-        def compute_Vx_targ(x: Array):
+        ## differentiate the policy and broadcast over batches
+        pi_x = jax.jacfwd(pi)
+        pi_xx = jax.jacfwd(pi_x)
+        batch_pi = jax.vmap(pi, in_axes = (0, None))
+        batch_pi_x = jax.vmap(pi_x, in_axes = (0, None))
+        batch_pi_xx = jax.vmap(pi_xx, in_axes = (0, None))
+
+        def compute_targets(x: Array):
             ## action under the current policy
             u_policy = batch_pi(x, ddpg.policy)
-            K_policy = batch_pi_x(x, ddpg.policy)
+            
+            K = batch_pi_x(x, ddpg.policy)
+            KK = batch_pi_xx(x, ddpg.policy)
+
+            ## propagate dynamics under current policy
             x_next_policy = batch_step(x, u_policy)
 
             fx, fu = batch_linearize_step(x, u_policy)
+            (fxx, fxu), (fux, fuu) = batch_quadraticize_step(x, u_policy)
+
             cx, cu = batch_linearize_cost(x, u_policy)
-            cx, cu = -cx, -cu ## flip sign on gradients
-            D = fx + einsum(fu, K_policy, 't x1 u, t u x2 -> t x1 x2')
+            (cxx, cxu), (cux, cuu) = batch_quadraticize_cost(x, u_policy)
 
+            ## first order closed loop (total) derivative
+            D = fx + einsum(fu, K, 't x1 u, t u x2 -> t x1 x2')
+            ## second order closed loop (total) derivative of dynamics
+            H = fxx \
+                + einsum(fxu, K, 't x x1 u, t u x2 -> t x x1 x2') \
+                + einsum(K, fux, 't u x1, t x u x2 -> t x x1 x2') \
+                + einsum(K, fuu, K, 't u1 x1, t x u1 u2, t u2 x2 -> t x x1 x2') \
+                + einsum(fu, KK, 't x u, t u x1 x2 -> t x x1 x2')
+            
+            ## first derivative of instantanious cost
+            cz = cx + einsum(cu, K, 't u, t u x -> t x')
+
+            ## hessian of instantanious cost
+            czz = cxx \
+                + einsum(cxu, K, 't x1 u, t u x2 -> t x1 x2') \
+                + einsum(K, cux, 't u x1, t u x2 -> t x1 x2') \
+                + einsum(K, cuu, K, 't u1 x1, t u1 u2, t u2 x2 -> t x1 x2') \
+                + einsum(cu, KK, 't u, t u x1 x2 -> t x1 x2')
+            
+            ## value gradient and value hessian computed in the next state
             Vx_next = batch_Vx(x_next_policy, ddpg.target_critic, ddpg.target_policy)
+            Vxx_next = batch_Vxx(x_next_policy, ddpg.target_critic, ddpg.target_policy)
 
-            Vx_target = cx + einsum(cu, K_policy, 'b u, b u x -> b x') + (1.0 - t) * ddpg.gamma * einsum(Vx_next, D, 'b x, b x x1 -> b x1')
-            return Vx_target
-        
-        Vx_target = compute_Vx_targ(x)
+            ## compute the gradient target
+            Vx_target = cz + (1.0 - t) * gamma * einsum(Vx_next, D, 'b x, b x x1 -> b x1')
+
+            ## compute the hessian target
+            pullback = einsum(D, Vxx_next, D, 'b x1 x2, b x1 x3, b x3 x4 -> b x2 x4')
+            pushforward = einsum(Vx_next, H, 'b x, b x x1 x2 -> b x1 x2')
+
+            Vxx_target = (1.0 - t)[:, :, None] * gamma * (pullback + pushforward) + czz
+
+            return Vx_target, Vxx_target
+
+        Vx_target, Vxx_target = compute_targets(x)
 
         ## normalize states
         z = ddpg.batch_normalize_state(x)
@@ -196,27 +244,27 @@ def make_update_critic(step: Callable, cost: Callable, grad_penalty: float):
 
         ## compute action in next state
         u_next = ddpg.target_policy(z_next)
-        v_next = ddpg.target_critic(z_next, u_next)
         ## compute Bellman TD target
-        y = r + (1.0 - t) * ddpg.gamma * v_next
+        V_target = r + (1.0 - t) * gamma * ddpg.target_critic(z_next, u_next)
 
         def loss_fn(critic: Critic):
             ## compute values
             v = critic(z, u)
             vx = batch_Vx(x, critic, ddpg.policy)
+            vxx = batch_Vxx(x, critic, ddpg.policy)
             
-            value_loss = jnp.mean(optax.huber_loss(v, y))
+            value_loss = jnp.mean(optax.huber_loss(v, V_target))
             value_grad_loss = jnp.mean(optax.huber_loss(vx, Vx_target))
+            value_hess_loss = jnp.mean(optax.huber_loss(vxx, Vxx_target))
 
-            loss = value_loss + value_grad_loss * grad_penalty
-            aux = (value_loss, value_grad_loss)
-            
+            loss = value_loss + value_grad_loss * grad_penalty + value_hess_loss * hess_penalty
+            aux = (value_loss, value_grad_loss, value_hess_loss)
             return loss, aux
         
-        (loss, (value_loss, value_grad_loss)), grads = nnx.value_and_grad(loss_fn, has_aux = True)(ddpg.critic)
+        (loss, (value_loss, value_grad_loss, value_hess_loss)), grads = nnx.value_and_grad(loss_fn, has_aux = True)(ddpg.critic)
 
         ddpg.critic_opt.update(grads)
-        return value_loss, value_grad_loss
+        return value_loss, value_grad_loss, value_hess_loss
     
     return update_critic
 
@@ -238,14 +286,16 @@ def update_policy(ddpg: DDPG, batch: tuple):
 @nnx.jit
 def soft_update(model: nnx.Module, target_model: nnx.Module, tau: float = 0.005):
 
+    new_target_model = nnx.clone(target_model)
+
     new_state = jax.tree_util.tree_map(
         lambda p, tp: tau * p + (1 - tau) * tp,
         nnx.state(model),
-        nnx.state(target_model)
+        nnx.state(new_target_model)
     )
 
-    nnx.update(target_model, new_state)
-    return target_model
+    nnx.update(new_target_model, new_state)
+    return new_target_model
 
 @chex.dataclass(frozen = True)
 class SART:
