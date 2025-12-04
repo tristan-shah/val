@@ -50,7 +50,7 @@ def make_update_value(policy: Policy, step: Callable, cost: Callable, normalize:
     # batch_cost = jax.jit(jax.vmap(cost))
     batch_normalize = jax.jit(jax.vmap(normalize))
 
-    # @nnx.jit
+    @nnx.jit
     def update_value(value: Value, target_value: Value, value_opt: nnx.Optimizer, batch: tuple):
 
         x, u, c, t, x_next = batch
@@ -97,14 +97,14 @@ if __name__ == '__main__':
     tau = 0.005
 
     ## buffer parameters
-    iterations = 10
+    iterations = 100
     num_env = 1000
     episode_len = 400
     buffer_len = iterations * num_env * episode_len
     print(f'Buffer Length = {buffer_len}')
 
     ## can change this sampling batch size
-    batch_size = 256
+    batch_size = 1024
 
     ## instantiating the buffer
     buffer = fbx.make_flat_buffer(
@@ -154,7 +154,7 @@ if __name__ == '__main__':
     update_value = make_update_value(policy, step, pendulum_cost, normalize_pendulum_state, gamma)
 
     loss_hist = []
-    for i in range(1000):
+    for i in range(50000):
         key, subkey = jax.random.split(key)
 
         data = buffer.sample(buffer_state, subkey)

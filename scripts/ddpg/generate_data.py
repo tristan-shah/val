@@ -79,7 +79,7 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(seed)
 
     ## buffer parameters
-    iterations = 10
+    iterations = 100
     num_env = 1000
     episode_len = 400
     buffer_len = iterations * num_env * episode_len
@@ -147,7 +147,7 @@ if __name__ == '__main__':
     for _ in range(iterations):
         key, subkey = jax.random.split(key)
         ## initialize a random batch of states
-        batch_key = jax.random.split(key, num_env)
+        batch_key = jax.random.split(subkey, num_env)
         x = batch_init_state(batch_key)
 
         done = jnp.zeros((num_env, 1), dtype = jnp.bool)
