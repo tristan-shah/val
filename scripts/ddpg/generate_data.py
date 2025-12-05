@@ -124,7 +124,6 @@ if __name__ == '__main__':
         add_batch_size = num_env
     )
 
-
     ## jit compiling buffer functions
     buffer = buffer.replace(
         init = jax.jit(buffer.init),
@@ -144,7 +143,7 @@ if __name__ == '__main__':
     ## initialize replay buffer with dummy transition
     buffer_state = buffer.init(sart)
 
-    for _ in range(iterations):
+    for iteration in range(iterations):
         key, subkey = jax.random.split(key)
         ## initialize a random batch of states
         batch_key = jax.random.split(subkey, num_env)
@@ -168,7 +167,7 @@ if __name__ == '__main__':
             ## overwrite previous state
             x = x_next
 
-        print(f'Iteration = {i}')
+        print(f'Iteration = {iteration}')
 
     # === SAVE THE BUFFER ===
     save_dir = Path('buffers/pendulum_ddpg_dataset').resolve()
