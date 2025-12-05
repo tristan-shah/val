@@ -50,48 +50,66 @@ if __name__ == '__main__':
     value_state = manager.restore(49500, args = ocp.args.StandardRestore(nnx.state(value)))
     nnx.update(value, value_state)
 
+
+    without_penalty_test_loss_hist = jnp.load('offline/value_grad-grad_penalty=0.0-value_hidden_dim=256-value_num_layers=10/test_loss_hist.npy')
     test_loss_hist = jnp.load(path / 'test_loss_hist.npy')
 
-    '''
-    line plot (variable theta)
-    '''
-    pi = jax.jit(lambda _x: policy(normalize_pendulum_state(_x)))
-
-    ## build functions
-    unroll_policy = make_unroll_policy(step, pi, episode_len)
-    compute_value = make_compute_value(pendulum_cost)
-
-    @jax.jit
-    def compute_true_value(xt: Array):
-        X, U = unroll_policy(xt)
-        return compute_value(X, U, gamma)
-    
-    n_theta = 10000
-    theta_dot = 2.0
-    theta_min, theta_max = -2 * jnp.pi, 2.0 * jnp.pi
-
-    # Create meshgrid
-    theta_grid = jnp.linspace(theta_min, theta_max, n_theta)
-
-    grid_points = jnp.stack([
-        theta_grid,
-        jnp.repeat(theta_dot, n_theta)
-    ], axis = -1)
-
-    z = jax.vmap(normalize_pendulum_state)(grid_points)
-
-    V_true = jax.vmap(compute_true_value)(grid_points)[:, 0]
-    V_learned = jax.vmap(value)(z)
-
     fig, ax = plt.subplots(1, 1)
-    ax.set_title(f'Value Function Landscape for ' + r'$\dot\theta = $' + f'{theta_dot} (rad/s)')
-    ax.set_xlabel(r'$\theta$ (rad)')
-    ax.set_ylabel('Value')
+    ax.set_title('Error From True Value Function')
+    ax.set_xlabel('Test Iteration')
+    ax.set_ylabel('Log MSE Error')
 
-    ax.plot(theta_grid, V_true, label = 'True Value')
-    ax.plot(theta_grid, V_learned, label = 'Learned Value')
-
+    ax.plot(jnp.log(test_loss_hist), label = 'Gradient Penalty = 1.0')
+    ax.plot(jnp.log(without_penalty_test_loss_hist), label = 'Gradient Penalty = 0.0')
     ax.legend()
-    fig.savefig('test.png', dpi = 300)
+    fig.tight_layout()
+    fig.savefig('gradient_penalty.png', dpi = 300)
     plt.show()
+
+
+
+
+
+    # '''
+    # line plot (variable theta)
+    # '''
+    # pi = jax.jit(lambda _x: policy(normalize_pendulum_state(_x)))
+
+    # ## build functions
+    # unroll_policy = make_unroll_policy(step, pi, episode_len)
+    # compute_value = make_compute_value(pendulum_cost)
+
+    # @jax.jit
+    # def compute_true_value(xt: Array):
+    #     X, U = unroll_policy(xt)
+    #     return compute_value(X, U, gamma)
+    
+    # n_theta = 10000
+    # theta_dot = 2.0
+    # theta_min, theta_max = -2 * jnp.pi, 2.0 * jnp.pi
+
+    # # Create meshgrid
+    # theta_grid = jnp.linspace(theta_min, theta_max, n_theta)
+
+    # grid_points = jnp.stack([
+    #     theta_grid,
+    #     jnp.repeat(theta_dot, n_theta)
+    # ], axis = -1)
+
+    # z = jax.vmap(normalize_pendulum_state)(grid_points)
+
+    # V_true = jax.vmap(compute_true_value)(grid_points)[:, 0]
+    # V_learned = jax.vmap(value)(z)
+
+    # fig, ax = plt.subplots(1, 1)
+    # ax.set_title(f'Value Function Landscape for ' + r'$\dot\theta = $' + f'{theta_dot} (rad/s)')
+    # ax.set_xlabel(r'$\theta$ (rad)')
+    # ax.set_ylabel('Value')
+
+    # ax.plot(theta_grid, V_true, label = 'True Value')
+    # ax.plot(theta_grid, V_learned, label = 'Learned Value')
+
+    # ax.legend()
+    # fig.savefig('test.png', dpi = 300)
+    # plt.show()
 
