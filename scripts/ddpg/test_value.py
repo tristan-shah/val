@@ -43,15 +43,14 @@ if __name__ == '__main__':
     value_activation = nnx.gelu
     value = Value(rngs, input_dim, hidden_dim = value_hidden_dim, num_layers = value_num_layers, activation = value_activation)
 
-    # path = Path(f'offline/value-value_hidden_dim={value_hidden_dim}-value_num_layers={value_num_layers}').resolve()
-    # path = Path(f'offline/value_grad-grad_penalty=0.0-value_hidden_dim=256-value_num_layers=10').resolve()
-    path = Path(f'offline/value_grad-grad_penalty=1.0-value_hidden_dim=256-value_num_layers=10').resolve()
+    # path = Path('offline/train_steps=100000-value_grad-grad_penalty=0.05-value_hidden_dim=256-value_num_layers=10').resolve()
+    path = Path('offline/train_steps=100000-value_grad-grad_penalty=0.0-value_hidden_dim=256-value_num_layers=10').resolve()
     manager = ocp.CheckpointManager(path.resolve())
-    value_state = manager.restore(49500, args = ocp.args.StandardRestore(nnx.state(value)))
+    value_state = manager.restore(99500, args = ocp.args.StandardRestore(nnx.state(value)))
     nnx.update(value, value_state)
 
-
-    without_penalty_test_loss_hist = jnp.load('offline/value_grad-grad_penalty=0.0-value_hidden_dim=256-value_num_layers=10/test_loss_hist.npy')
+    # without_penalty_test_loss_hist = jnp.load('offline/value_grad-grad_penalty=0.0-value_hidden_dim=256-value_num_layers=10/test_loss_hist.npy')
+    without_penalty_test_loss_hist = jnp.load('offline/train_steps=100000-value_grad-grad_penalty=0.0-value_hidden_dim=256-value_num_layers=10/test_loss_hist.npy')
     test_loss_hist = jnp.load(path / 'test_loss_hist.npy')
 
     fig, ax = plt.subplots(1, 1)
@@ -59,7 +58,7 @@ if __name__ == '__main__':
     ax.set_xlabel('Test Iteration')
     ax.set_ylabel('Log MSE Error')
 
-    ax.plot(jnp.log(test_loss_hist), label = 'Gradient Penalty = 1.0')
+    ax.plot(jnp.log(test_loss_hist), label = 'Gradient Penalty = 0.05')
     ax.plot(jnp.log(without_penalty_test_loss_hist), label = 'Gradient Penalty = 0.0')
     ax.legend()
     fig.tight_layout()
@@ -70,46 +69,46 @@ if __name__ == '__main__':
 
 
 
-    # '''
-    # line plot (variable theta)
-    # '''
-    # pi = jax.jit(lambda _x: policy(normalize_pendulum_state(_x)))
+    '''
+    line plot (variable theta)
+    '''
+    pi = jax.jit(lambda _x: policy(normalize_pendulum_state(_x)))
 
-    # ## build functions
-    # unroll_policy = make_unroll_policy(step, pi, episode_len)
-    # compute_value = make_compute_value(pendulum_cost)
+    ## build functions
+    unroll_policy = make_unroll_policy(step, pi, episode_len)
+    compute_value = make_compute_value(pendulum_cost)
 
-    # @jax.jit
-    # def compute_true_value(xt: Array):
-    #     X, U = unroll_policy(xt)
-    #     return compute_value(X, U, gamma)
+    @jax.jit
+    def compute_true_value(xt: Array):
+        X, U = unroll_policy(xt)
+        return compute_value(X, U, gamma)
     
-    # n_theta = 10000
-    # theta_dot = 2.0
-    # theta_min, theta_max = -2 * jnp.pi, 2.0 * jnp.pi
+    n_theta = 10000
+    theta_dot = 2.0
+    theta_min, theta_max = -2 * jnp.pi, 2.0 * jnp.pi
 
-    # # Create meshgrid
-    # theta_grid = jnp.linspace(theta_min, theta_max, n_theta)
+    # Create meshgrid
+    theta_grid = jnp.linspace(theta_min, theta_max, n_theta)
 
-    # grid_points = jnp.stack([
-    #     theta_grid,
-    #     jnp.repeat(theta_dot, n_theta)
-    # ], axis = -1)
+    grid_points = jnp.stack([
+        theta_grid,
+        jnp.repeat(theta_dot, n_theta)
+    ], axis = -1)
 
-    # z = jax.vmap(normalize_pendulum_state)(grid_points)
+    z = jax.vmap(normalize_pendulum_state)(grid_points)
 
-    # V_true = jax.vmap(compute_true_value)(grid_points)[:, 0]
-    # V_learned = jax.vmap(value)(z)
+    V_true = jax.vmap(compute_true_value)(grid_points)[:, 0]
+    V_learned = jax.vmap(value)(z)
 
-    # fig, ax = plt.subplots(1, 1)
-    # ax.set_title(f'Value Function Landscape for ' + r'$\dot\theta = $' + f'{theta_dot} (rad/s)')
-    # ax.set_xlabel(r'$\theta$ (rad)')
-    # ax.set_ylabel('Value')
+    fig, ax = plt.subplots(1, 1)
+    ax.set_title(f'Value Function Landscape for ' + r'$\dot\theta = $' + f'{theta_dot} (rad/s)')
+    ax.set_xlabel(r'$\theta$ (rad)')
+    ax.set_ylabel('Value')
 
-    # ax.plot(theta_grid, V_true, label = 'True Value')
-    # ax.plot(theta_grid, V_learned, label = 'Learned Value')
+    ax.plot(theta_grid, V_true, label = 'True Value')
+    ax.plot(theta_grid, V_learned, label = 'Learned Value')
 
-    # ax.legend()
-    # fig.savefig('test.png', dpi = 300)
-    # plt.show()
+    ax.legend()
+    fig.savefig('test.png', dpi = 300)
+    plt.show()
 
