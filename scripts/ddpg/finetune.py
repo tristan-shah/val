@@ -1,7 +1,11 @@
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
 from typing import Callable
 from pathlib import Path
 
 import jax
+print(jax.devices())
 from jax import Array
 from jax import numpy as jnp
 from einops import einsum
@@ -63,77 +67,77 @@ def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: C
         
         loss, grad = nnx.value_and_grad(loss_fn)(value)
         value_opt.update(grad)
-        return loss
+        return loss, 0.0
     
     return update_value
 
-def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: Callable, gamma: float, grad_penalty: float):
+# def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: Callable, gamma: float, grad_penalty: float):
 
 
-    batch_linearize_step = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
-    batch_linearize_cost = jax.vmap(jax.jacrev(cost, argnums = (0, 1)))
-    batch_pi_x = jax.vmap(jax.jacfwd(pi))
+#     batch_linearize_step = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
+#     batch_linearize_cost = jax.vmap(jax.jacrev(cost, argnums = (0, 1)))
+#     batch_pi_x = jax.vmap(jax.jacfwd(pi))
 
-    def make_V(value: Value):
+#     def make_V(value: Value):
 
-        graphdef = nnx.graphdef(value)
+#         graphdef = nnx.graphdef(value)
 
-        def V(x: Array, state: nnx.State):
-            return nnx.merge(graphdef, state)(normalize(x)).squeeze()
+#         def V(x: Array, state: nnx.State):
+#             return nnx.merge(graphdef, state)(normalize(x)).squeeze()
         
-        Vx = jax.jacrev(V)
+#         Vx = jax.jacrev(V)
 
-        ## batchwise versions of value and gradient of value
-        V = jax.vmap(V, in_axes = (0, None))
-        Vx = jax.vmap(Vx, in_axes = (0, None))
-        return V, Vx
+#         ## batchwise versions of value and gradient of value
+#         V = jax.vmap(V, in_axes = (0, None))
+#         Vx = jax.vmap(Vx, in_axes = (0, None))
+#         return V, Vx
     
-    @nnx.jit
-    def update_value(value: Value, target_value: Value, value_opt: nnx.Optimizer, batch: tuple):
+#     @nnx.jit
+#     def update_value(value: Value, target_value: Value, value_opt: nnx.Optimizer, batch: tuple):
 
-        V, Vx = make_V(value)
+#         V, Vx = make_V(value)
 
-        x, u, c, t, x_next = batch
+#         x, u, c, t, x_next = batch
 
-        ## compute next value and gradient
-        v_next = jax.lax.stop_gradient(V(x_next, nnx.state(target_value)))
-        vx_next = jax.lax.stop_gradient(Vx(x_next, nnx.state(target_value)))
+#         ## compute next value and gradient
+#         v_next = jax.lax.stop_gradient(V(x_next, nnx.state(target_value)))
+#         vx_next = jax.lax.stop_gradient(Vx(x_next, nnx.state(target_value)))
 
-        ## compute policy gradient
-        K = batch_pi_x(x)
-        ## compute dynamics gradients
-        fx, fu = batch_linearize_step(x, u)
-        ## closed loop derivative
-        D = fx + einsum(fu, K, 't x1 u, t u x2 -> t x1 x2')
-        ## derivatives of cost
-        cx, cu = batch_linearize_cost(x, u)
-        cz = cx + einsum(cu, K, 't u, t u x -> t x')
+#         ## compute policy gradient
+#         K = batch_pi_x(x)
+#         ## compute dynamics gradients
+#         fx, fu = batch_linearize_step(x, u)
+#         ## closed loop derivative
+#         D = fx + einsum(fu, K, 't x1 u, t u x2 -> t x1 x2')
+#         ## derivatives of cost
+#         cx, cu = batch_linearize_cost(x, u)
+#         cz = cx + einsum(cu, K, 't u, t u x -> t x')
 
-        ## compute regression targets
-        v_target = c[:, 0] + (1.0 - t[:, 0]) * gamma * v_next
-        vx_target = cz + (1.0 - t) * gamma * einsum(D, vx_next, 'b x1 x2, b x1 -> b x2')
+#         ## compute regression targets
+#         v_target = c[:, 0] + (1.0 - t[:, 0]) * gamma * v_next
+#         vx_target = cz + (1.0 - t) * gamma * einsum(D, vx_next, 'b x1 x2, b x1 -> b x2')
 
 
-        def loss_fn(value: Value):
+#         def loss_fn(value: Value):
 
-            value_state = nnx.state(value)
-            v = V(x, value_state)
-            vx = Vx(x, value_state)
+#             value_state = nnx.state(value)
+#             v = V(x, value_state)
+#             vx = Vx(x, value_state)
 
-            v_loss = jnp.mean(optax.huber_loss(v, v_target))
-            vx_loss = jnp.mean(optax.huber_loss(vx, vx_target))
-            loss = v_loss + vx_loss * grad_penalty
+#             v_loss = jnp.mean(optax.huber_loss(v, v_target))
+#             vx_loss = jnp.mean(optax.huber_loss(vx, vx_target))
+#             loss = v_loss + vx_loss * grad_penalty
             
-            aux = (v_loss, vx_loss)
-            return loss, aux
+#             aux = (v_loss, vx_loss)
+#             return loss, aux
         
-        (loss, (v_loss, vx_loss)), grad = nnx.value_and_grad(loss_fn, has_aux = True)(value)
+#         (loss, (v_loss, vx_loss)), grad = nnx.value_and_grad(loss_fn, has_aux = True)(value)
 
-        value_opt.update(grad)
+#         value_opt.update(grad)
 
-        return v_loss, vx_loss
+#         return v_loss, vx_loss
 
-    return update_value
+#     return update_value
 
 if __name__ == '__main__':
 
@@ -151,7 +155,7 @@ if __name__ == '__main__':
     input_dim = len(normalize_pendulum_state(init_pendulum_state(key))) ## get the shape of the normalized state
     ctrl_dim = dyn.control_dim
     
-    grad_penalty = 1.0
+    grad_penalty = 0.0
 
     ## hyperparameters of ddpg
     hidden_dim = 128
@@ -223,7 +227,13 @@ if __name__ == '__main__':
     value_activation = nnx.gelu
     value = Value(rngs, input_dim, hidden_dim = value_hidden_dim, num_layers = value_num_layers, activation = value_activation)
     target_value = nnx.clone(value)
-    value_opt = nnx.Optimizer(value, optax.adam(1e-3))
+
+    tx = optax.chain(
+        optax.clip_by_global_norm(1.0),
+        optax.adamw(1e-3)
+    )
+
+    value_opt = nnx.Optimizer(value, tx)
     ## make the value update function
     update_value = make_update_value(step, pi, pendulum_cost, normalize_pendulum_state, gamma, grad_penalty)
 
@@ -260,7 +270,8 @@ if __name__ == '__main__':
     vx_loss_hist = []
     test_loss_hist = []
 
-    path = Path(f'offline/value_grad-grad_penalty={grad_penalty}-value_hidden_dim={value_hidden_dim}-value_num_layers={value_num_layers}').resolve()
+    train_steps = 100000
+    path = Path(f'offline/train_steps={train_steps}-value_grad-grad_penalty={grad_penalty}-value_hidden_dim={value_hidden_dim}-value_num_layers={value_num_layers}').resolve()
 
     ## Create a checkpointer
     options = ocp.CheckpointManagerOptions(
@@ -268,7 +279,7 @@ if __name__ == '__main__':
     )
     checkpointer = ocp.CheckpointManager(directory = path, options = options)
 
-    for i in range(50000):
+    for i in range(train_steps):
 
         key, subkey = jax.random.split(key)
 
