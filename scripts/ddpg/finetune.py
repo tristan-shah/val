@@ -67,74 +67,73 @@ def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: C
     
     return update_value
 
-# def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: Callable, gamma: float, grad_penalty: float):
+def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: Callable, gamma: float, grad_penalty: float):
 
 
-#     batch_linearize_step = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
-#     batch_linearize_cost = jax.vmap(jax.jacrev(cost, argnums = (0, 1)))
-#     batch_pi_x = jax.vmap(jax.jacfwd(pi))
+    batch_linearize_step = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
+    batch_linearize_cost = jax.vmap(jax.jacrev(cost, argnums = (0, 1)))
+    batch_pi_x = jax.vmap(jax.jacfwd(pi))
 
-#     def make_V(value: Value):
+    def make_V(value: Value):
 
-#         graphdef = nnx.graphdef(value)
+        graphdef = nnx.graphdef(value)
 
-#         def V(x: Array, state: nnx.State):
-#             return nnx.merge(graphdef, state)(normalize(x)).squeeze()
+        def V(x: Array, state: nnx.State):
+            return nnx.merge(graphdef, state)(normalize(x)).squeeze()
         
-#         Vx = jax.jacrev(V)
+        Vx = jax.jacrev(V)
 
-#         V = jax.vmap(V, in_axes = (0, None))
-#         Vx = jax.vmap(Vx, in_axes = (0, None))
-#         return V, Vx
+        ## batchwise versions of value and gradient of value
+        V = jax.vmap(V, in_axes = (0, None))
+        Vx = jax.vmap(Vx, in_axes = (0, None))
+        return V, Vx
     
-#     @nnx.jit
-#     def update_value(value: Value, target_value: Value, value_opt: nnx.Optimizer, batch: tuple):
+    @nnx.jit
+    def update_value(value: Value, target_value: Value, value_opt: nnx.Optimizer, batch: tuple):
 
-#         V, Vx = make_V(value)
+        V, Vx = make_V(value)
 
-#         x, u, c, t, x_next = batch
+        x, u, c, t, x_next = batch
 
-#         ## compute next value and gradient
-#         v_next = jax.lax.stop_gradient(V(x_next, nnx.state(target_value)))
-#         # vx_next = jax.lax.stop_gradient(Vx(x_next, nnx.state(target_value)))
+        ## compute next value and gradient
+        v_next = jax.lax.stop_gradient(V(x_next, nnx.state(target_value)))
+        vx_next = jax.lax.stop_gradient(Vx(x_next, nnx.state(target_value)))
 
-#         # ## compute policy gradient
-#         # K = batch_pi_x(x)
-#         # ## compute dynamics gradients
-#         # fx, fu = batch_linearize_step(x, u)
-#         # ## closed loop derivative
-#         # D = fx + einsum(fu, K, 't x1 u, t u x2 -> t x1 x2')
-#         # ## derivatives of cost
-#         # cx, cu = batch_linearize_cost(x, u)
-#         # cz = cx + einsum(cu, K, 't u, t u x -> t x')
+        ## compute policy gradient
+        K = batch_pi_x(x)
+        ## compute dynamics gradients
+        fx, fu = batch_linearize_step(x, u)
+        ## closed loop derivative
+        D = fx + einsum(fu, K, 't x1 u, t u x2 -> t x1 x2')
+        ## derivatives of cost
+        cx, cu = batch_linearize_cost(x, u)
+        cz = cx + einsum(cu, K, 't u, t u x -> t x')
 
-#         ## compute regression targets
-#         v_target = c + (1.0 - t) * gamma * v_next
-#         # vx_target = cz + (1.0 - t) * gamma * einsum(D, vx_next, 'b x1 x2, b x1 -> b x2')
+        ## compute regression targets
+        v_target = c[:, 0] + (1.0 - t[:, 0]) * gamma * v_next
+        vx_target = cz + (1.0 - t) * gamma * einsum(D, vx_next, 'b x1 x2, b x1 -> b x2')
 
-#         def loss_fn(value: Value):
 
-#             value_state = nnx.state(value)
+        def loss_fn(value: Value):
 
-#             v = V(x, value_state)
-#             # vx = Vx(x, value_state)
+            value_state = nnx.state(value)
+            v = V(x, value_state)
+            vx = Vx(x, value_state)
 
-#             v_loss = jnp.mean(optax.huber_loss(v, v_target))
-#             # vx_loss = jnp.mean(optax.huber_loss(vx, vx_target))
-#             vx_loss = 0.0
-
-#             loss = v_loss #+ vx_loss * grad_penalty
+            v_loss = jnp.mean(optax.huber_loss(v, v_target))
+            vx_loss = jnp.mean(optax.huber_loss(vx, vx_target))
+            loss = v_loss + vx_loss * grad_penalty
             
-#             aux = (v_loss, vx_loss)
-#             return loss, aux
+            aux = (v_loss, vx_loss)
+            return loss, aux
         
-#         (loss, (v_loss, vx_loss)), grad = nnx.value_and_grad(loss_fn, has_aux = True)(value)
+        (loss, (v_loss, vx_loss)), grad = nnx.value_and_grad(loss_fn, has_aux = True)(value)
 
-#         value_opt.update(grad)
+        value_opt.update(grad)
 
-#         return v_loss, vx_loss
+        return v_loss, vx_loss
 
-#     return update_value
+    return update_value
 
 if __name__ == '__main__':
 
@@ -152,7 +151,7 @@ if __name__ == '__main__':
     input_dim = len(normalize_pendulum_state(init_pendulum_state(key))) ## get the shape of the normalized state
     ctrl_dim = dyn.control_dim
     
-    grad_penalty = 0.0 #1e-12
+    grad_penalty = 1.0
 
     ## hyperparameters of ddpg
     hidden_dim = 128
@@ -226,13 +225,19 @@ if __name__ == '__main__':
     target_value = nnx.clone(value)
     value_opt = nnx.Optimizer(value, optax.adam(1e-3))
     ## make the value update function
-    # update_value = make_update_value(normalize_pendulum_state, gamma)
     update_value = make_update_value(step, pi, pendulum_cost, normalize_pendulum_state, gamma, grad_penalty)
 
-    num_test_points = 10000
-    ## initialize a random batch of states
-    test_points = batch_init_state(jax.random.split(key, num_test_points))
-    normalized_test_points = jax.vmap(normalize_pendulum_state)(test_points)
+    '''
+    testing
+    '''
+    # key, subkey = jax.random.split(key)
+    # # sample a batch from the buffer
+    # data = buffer.sample(buffer_state, subkey)
+    # # extract experience
+    # batch = (data.experience.first.s, data.experience.first.a, data.experience.first.r, data.experience.first.t, data.experience.second.s)
+    # # v_loss, vx_loss = update_value(value, target_value, value_opt, batch)
+    # print(batch[0])
+
 
     ## build functions
     unroll_policy = make_unroll_policy(step, pi, episode_len)
@@ -244,6 +249,9 @@ if __name__ == '__main__':
         return compute_value(X, U, gamma)
     
     ## evaluate true value over grid points
+    num_test_points = 10000
+    test_points = batch_init_state(jax.random.split(key, num_test_points))
+    normalized_test_points = jax.vmap(normalize_pendulum_state)(test_points)
     true_value = jax.vmap(compute_true_value)(test_points)[:, 0]
 
     test_every = 500
@@ -260,17 +268,6 @@ if __name__ == '__main__':
     )
     checkpointer = ocp.CheckpointManager(directory = path, options = options)
 
-    '''
-    testing
-    '''
-    # key, subkey = jax.random.split(key)
-    ## sample a batch from the buffer
-    # data = buffer.sample(buffer_state, subkey)
-    ## extract experience
-    # batch = (data.experience.first.s, data.experience.first.a, data.experience.first.r, data.experience.first.t, data.experience.second.s)
-    # v_loss, vx_loss = update_value(value, target_value, value_opt, batch)
-
-
     for i in range(50000):
 
         key, subkey = jax.random.split(key)
@@ -281,9 +278,9 @@ if __name__ == '__main__':
         batch = (data.experience.first.s, data.experience.first.a, data.experience.first.r, data.experience.first.t, data.experience.second.s)
 
         ## update value function
-        v_loss = update_value(value, target_value, value_opt, batch)
-        vx_loss = 0.0
-        # v_loss, vx_loss = update_value(value, target_value, value_opt, batch)
+        # v_loss = update_value(value, target_value, value_opt, batch)
+        # vx_loss = 0.0
+        v_loss, vx_loss = update_value(value, target_value, value_opt, batch)
         ## update target network
         target_value = soft_update(value, target_value, tau)
 

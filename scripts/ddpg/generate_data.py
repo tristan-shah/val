@@ -1,77 +1,14 @@
-from typing import Callable
 from pathlib import Path
 
 import jax
-from jax import Array
 from jax import numpy as jnp
-from einops import einsum
 from flax import nnx
 import flashbax as fbx
-import optax
 import orbax.checkpoint as ocp
-import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step
 from val.pendulum import init_pendulum_state, normalize_pendulum_state, pendulum_cost
-from val.ddpg import SART, DDPG, Policy, build_hidden_layers, soft_update
-
-class Value(nnx.Module):
-    def __init__(
-            self, 
-            rngs: nnx.Rngs,
-            input_dim: int, 
-            hidden_dim: int, 
-            num_layers:int, 
-            activation: Callable,
-        ):
-        
-        layers = []
-        ## input layer
-        layers.append(nnx.Linear(input_dim, hidden_dim, rngs = rngs))
-        layers.append(activation)
-
-        ## hidden layers
-        layers.extend(build_hidden_layers(hidden_dim, num_layers, activation, rngs))
-
-        ## output layers
-        layers.append(nnx.Linear(hidden_dim, 1, rngs = rngs))
-
-        self.layers = nnx.Sequential(*layers)
-    
-    def __call__(self, x: Array):
-        return self.layers(x)
-    
-def make_update_value(policy: Policy, step: Callable, cost: Callable, normalize: Callable, gamma: float):
-
-    ## normalize state before input to policy
-    pi = lambda _x: policy(normalize(_x))
-    batch_pi = jax.jit(jax.vmap(pi))
-    batch_step = jax.jit(jax.vmap(step))
-    batch_cost = jax.jit(jax.vmap(cost))
-    batch_normalize = jax.jit(jax.vmap(normalize))
-
-    @nnx.jit
-    def update_value(value: Value, target_value: Value, value_opt: nnx.Optimizer, x: Array):
-        
-        u = batch_pi(x)
-        x_next = batch_step(x, u)
-        c = batch_cost(x, u)
-
-        z = batch_normalize(x)
-        z_next = batch_normalize(x_next)
-
-        v_ = jax.lax.stop_gradient(target_value(z_next))
-        y = c[:, None] + gamma * v_
-
-        def loss_fn(value):
-            v = value(z)
-            return jnp.mean(optax.huber_loss(v, y))
-        
-        loss, grad = nnx.value_and_grad(loss_fn)(value)
-        value_opt.update(grad)
-        return loss
-    
-    return update_value
+from val.ddpg import SART, DDPG
 
 if __name__ == '__main__':
     seed = 105

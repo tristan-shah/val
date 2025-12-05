@@ -28,7 +28,6 @@ if __name__ == '__main__':
     input_dim = len(normalize_pendulum_state(init_pendulum_state(key))) ## get the shape of the normalized state
     ctrl_dim = dyn.control_dim
 
-
     ## load in pretrained ddpg
     manager = ocp.CheckpointManager(
         directory = Path(f'checkpoints/hidden_dim={128}-num_layers_critic={4}-grad_penalty=0.0-hess_penalty=0.0').resolve()
@@ -44,7 +43,8 @@ if __name__ == '__main__':
     value_activation = nnx.gelu
     value = Value(rngs, input_dim, hidden_dim = value_hidden_dim, num_layers = value_num_layers, activation = value_activation)
 
-    path = Path(f'offline/value-value_hidden_dim={value_hidden_dim}-value_num_layers={value_num_layers}').resolve()
+    # path = Path(f'offline/value-value_hidden_dim={value_hidden_dim}-value_num_layers={value_num_layers}').resolve()
+    path = Path(f'offline/value_grad-grad_penalty=0.0-value_hidden_dim=256-value_num_layers=10').resolve()
     manager = ocp.CheckpointManager(path.resolve())
     value_state = manager.restore(49500, args = ocp.args.StandardRestore(nnx.state(value)))
     nnx.update(value, value_state)

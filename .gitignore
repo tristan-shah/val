@@ -1,3 +1,4 @@
+*.png
 offline/*
 buffers/*
 checkpoints/*
