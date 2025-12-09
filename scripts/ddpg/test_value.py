@@ -45,12 +45,14 @@ if __name__ == '__main__':
 
     path = Path('offline/train_steps=100000-value_grad-grad_penalty=0.05-value_hidden_dim=256-value_num_layers=10').resolve()
     # path = Path('offline/train_steps=100000-value_grad-grad_penalty=0.0-value_hidden_dim=256-value_num_layers=10').resolve()
+    # path = Path('offline/train_steps=100000-grad_penalty=0.05-hess_penalty=5e-05-value_hidden_dim=256-value_num_layers=10').resolve()
     manager = ocp.CheckpointManager(path.resolve())
     value_state = manager.restore(99500, args = ocp.args.StandardRestore(nnx.state(value)))
     nnx.update(value, value_state)
 
     # without_penalty_test_loss_hist = jnp.load('offline/value_grad-grad_penalty=0.0-value_hidden_dim=256-value_num_layers=10/test_loss_hist.npy')
     without_penalty_test_loss_hist = jnp.load('offline/train_steps=100000-value_grad-grad_penalty=0.0-value_hidden_dim=256-value_num_layers=10/test_loss_hist.npy')
+    hess_penalty_test_loss_hist = jnp.load('offline/train_steps=100000-grad_penalty=0.05-hess_penalty=5e-05-value_hidden_dim=256-value_num_layers=10/test_loss_hist.npy')
     test_loss_hist = jnp.load(path / 'test_loss_hist.npy')
 
     fig, ax = plt.subplots(1, 1)
@@ -58,8 +60,9 @@ if __name__ == '__main__':
     ax.set_xlabel('Test Iteration')
     ax.set_ylabel('Log MSE Error')
 
-    ax.plot(jnp.log(test_loss_hist), label = 'Gradient Penalty = 0.05')
-    ax.plot(jnp.log(without_penalty_test_loss_hist), label = 'Gradient Penalty = 0.0')
+    ax.plot(jnp.log(without_penalty_test_loss_hist), label = 'Vanilla')
+    ax.plot(jnp.log(test_loss_hist), label = 'Gradient Penalty')
+    ax.plot(jnp.log(hess_penalty_test_loss_hist), label = 'Gradient and Hessian')
     ax.legend()
     fig.tight_layout()
     fig.savefig('gradient_penalty.png', dpi = 300)
