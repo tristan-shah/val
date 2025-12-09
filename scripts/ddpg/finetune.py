@@ -1,5 +1,5 @@
-# import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 from typing import Callable
 from pathlib import Path
@@ -45,9 +45,64 @@ class Value(nnx.Module):
     
     def __call__(self, x: Array):
         return self.layers(x)
-    
-# def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: Callable, gamma: float, grad_penalty: float):
 
+
+# class ResidualBlock(nnx.Module):
+#     def __init__(self, dim: int, activation: Callable, rngs: nnx.Rngs):
+#         super().__init__()
+#         self.fc1 = nnx.Linear(dim, dim, rngs=rngs)
+#         self.fc2 = nnx.Linear(dim, dim, rngs=rngs)
+#         self.activation = activation
+
+#     def __call__(self, x: Array) -> Array:
+#         residual = x
+#         x = self.activation(self.fc1(x))
+#         x = self.fc2(x)
+#         return self.activation(x + residual)
+
+# class ResidualBlock(nnx.Module):
+#     def __init__(self, dim, activation, rngs):
+#         super().__init__()
+#         self.norm = nnx.LayerNorm(dim, rngs = rngs)
+#         self.fc1  = nnx.Linear(dim, dim, rngs=rngs)
+#         self.fc2  = nnx.Linear(dim, dim, rngs=rngs)
+#         self.activation = activation
+
+#     def __call__(self, x):
+#         h = self.norm(x)
+#         h = self.activation(self.fc1(h))
+#         h = self.fc2(h)
+#         return x + h
+
+# class Value(nnx.Module):
+#     def __init__(
+#         self, 
+#         rngs: nnx.Rngs,
+#         input_dim: int, 
+#         hidden_dim: int, 
+#         num_layers: int, 
+#         activation: Callable,
+#     ):
+#         super().__init__()
+#         layers = []
+
+#         # Input layer
+#         layers.append(nnx.Linear(input_dim, hidden_dim, rngs=rngs))
+#         layers.append(activation)
+
+#         # Residual hidden layers
+#         for _ in range(num_layers):
+#             layers.append(ResidualBlock(hidden_dim, activation, rngs))
+
+#         # Output layer
+#         layers.append(nnx.Linear(hidden_dim, 1, rngs=rngs))
+
+#         self.layers = nnx.Sequential(*layers)
+
+#     def __call__(self, x: Array) -> Array:
+#         return self.layers(x)
+
+# def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: Callable, gamma: float, grad_penalty: float, hess_penalty: float):
 #     batch_normalize = jax.jit(jax.vmap(normalize))
 
 #     @nnx.jit
@@ -67,7 +122,7 @@ class Value(nnx.Module):
         
 #         loss, grad = nnx.value_and_grad(loss_fn)(value)
 #         value_opt.update(grad)
-#         return loss, 0.0
+#         return loss, 0.0, 0.0
     
 #     return update_value
 
@@ -131,35 +186,34 @@ def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: C
         '''
         computing value hessian update
         '''
-        KK = batch_pi_xx(x)
-        (fxx, fxu), (fux, fuu) = batch_quadraticize_step(x, u)
-        (cxx, cxu), (cux, cuu) = batch_quadraticize_cost(x, u)
-        ## second order closed loop (total) derivative of dynamics
-        H = fxx \
-            + einsum(fxu, K, 't x x1 u, t u x2 -> t x x1 x2') \
-            + einsum(K, fux, 't u x1, t x u x2 -> t x x1 x2') \
-            + einsum(K, fuu, K, 't u1 x1, t x u1 u2, t u2 x2 -> t x x1 x2') \
-            + einsum(fu, KK, 't x u, t u x1 x2 -> t x x1 x2')
-        ## hessian of instantanious cost
-        czz = cxx \
-            + einsum(cxu, K, 't x1 u, t u x2 -> t x1 x2') \
-            + einsum(K, cux, 't u x1, t u x2 -> t x1 x2') \
-            + einsum(K, cuu, K, 't u1 x1, t u1 u2, t u2 x2 -> t x1 x2') \
-            + einsum(cu, KK, 't u, t u x1 x2 -> t x1 x2')
+        # KK = batch_pi_xx(x)
+        # (fxx, fxu), (fux, fuu) = batch_quadraticize_step(x, u)
+        # (cxx, cxu), (cux, cuu) = batch_quadraticize_cost(x, u)
+        # ## second order closed loop (total) derivative of dynamics
+        # H = fxx \
+        #     + einsum(fxu, K, 't x x1 u, t u x2 -> t x x1 x2') \
+        #     + einsum(K, fux, 't u x1, t x u x2 -> t x x1 x2') \
+        #     + einsum(K, fuu, K, 't u1 x1, t x u1 u2, t u2 x2 -> t x x1 x2') \
+        #     + einsum(fu, KK, 't x u, t u x1 x2 -> t x x1 x2')
+        # ## hessian of instantanious cost
+        # czz = cxx \
+        #     + einsum(cxu, K, 't x1 u, t u x2 -> t x1 x2') \
+        #     + einsum(K, cux, 't u x1, t u x2 -> t x1 x2') \
+        #     + einsum(K, cuu, K, 't u1 x1, t u1 u2, t u2 x2 -> t x1 x2') \
+        #     + einsum(cu, KK, 't u, t u x1 x2 -> t x1 x2')
 
         ## compute next value and gradient
         v_next = jax.lax.stop_gradient(V(x_next, nnx.state(target_value)))
         vx_next = jax.lax.stop_gradient(Vx(x_next, nnx.state(target_value)))
-        vxx_next = jax.lax.stop_gradient(Vxx(x_next, nnx.state(target_value)))
+        # vxx_next = jax.lax.stop_gradient(Vxx(x_next, nnx.state(target_value)))
 
         ## compute regression targets
         v_target = c[:, 0] + (1.0 - t[:, 0]) * gamma * v_next
         vx_target = cz + (1.0 - t) * gamma * einsum(D, vx_next, 'b x1 x2, b x1 -> b x2')
 
-        pullback = einsum(D, vxx_next, D, 'b x1 x3, b x1 x2, b x2 x4 -> b x3 x4')
-        pushforward = einsum(vx_next, H, 'b x, b x x1 x2 -> b x1 x2')
-
-        vxx_target = czz + (1.0 - t[:, :, None]) * gamma * (pullback + pushforward)
+        # pullback = einsum(D, vxx_next, D, 'b x1 x3, b x1 x2, b x2 x4 -> b x3 x4')
+        # pushforward = einsum(vx_next, H, 'b x, b x x1 x2 -> b x1 x2')
+        # vxx_target = czz + (1.0 - t[:, :, None]) * gamma * (pullback + pushforward)
 
         def loss_fn(value: Value):
 
@@ -167,12 +221,13 @@ def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: C
 
             v = V(x, value_state)
             vx = Vx(x, value_state)
-            vxx = Vxx(x, value_state)
+            # vxx = Vxx(x, value_state)
             
             v_loss = jnp.mean(optax.huber_loss(v, v_target))
             vx_loss = jnp.mean(optax.huber_loss(vx, vx_target))
-            vxx_loss = jnp.mean(optax.huber_loss(vxx, vxx_target))
-            loss = v_loss + vx_loss * grad_penalty + vxx_loss * hess_penalty
+            # vxx_loss = jnp.mean(optax.huber_loss(vxx, vxx_target))
+            vxx_loss = 0.0
+            loss = v_loss + vx_loss * grad_penalty# + vxx_loss * hess_penalty
             
             aux = (v_loss, vx_loss, vxx_loss)
             return loss, aux
@@ -187,7 +242,7 @@ def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: C
 
 if __name__ == '__main__':
 
-    seed = 0
+    seed = 1
     rngs = nnx.Rngs(seed)
     key = jax.random.PRNGKey(seed)
 
@@ -202,7 +257,9 @@ if __name__ == '__main__':
     ctrl_dim = dyn.control_dim
     
     grad_penalty = 0.05
-    hess_penalty = 0.5
+    hess_penalty = 0.0
+    # grad_penalty = 0.0
+    # hess_penalty = 0.0
 
     ## hyperparameters of ddpg
     hidden_dim = 128
@@ -269,8 +326,8 @@ if __name__ == '__main__':
     pi = jax.jit(lambda _x: policy(normalize_pendulum_state(_x)))
 
     ## instantiate value function
-    value_hidden_dim = 256
-    value_num_layers = 10
+    value_hidden_dim = 128 #512
+    value_num_layers = 5 #10
     value_activation = nnx.gelu
     value = Value(rngs, input_dim, hidden_dim = value_hidden_dim, num_layers = value_num_layers, activation = value_activation)
     target_value = nnx.clone(value)
@@ -296,8 +353,6 @@ if __name__ == '__main__':
     # print(v_loss, vx_loss, vxx_loss)
 
 
-
-
     ## build functions
     unroll_policy = make_unroll_policy(step, pi, episode_len)
     compute_value = make_compute_value(pendulum_cost)
@@ -321,7 +376,6 @@ if __name__ == '__main__':
     test_loss_hist = []
 
     train_steps = 100000
-    # path = Path(f'offline/train_steps={train_steps}-value_grad-grad_penalty={grad_penalty}-value_hidden_dim={value_hidden_dim}-value_num_layers={value_num_layers}').resolve()
     path = Path(f'offline/train_steps={train_steps}-grad_penalty={grad_penalty}-hess_penalty={hess_penalty}-value_hidden_dim={value_hidden_dim}-value_num_layers={value_num_layers}').resolve()
 
     ## Create a checkpointer
@@ -340,8 +394,6 @@ if __name__ == '__main__':
         batch = (data.experience.first.s, data.experience.first.a, data.experience.first.r, data.experience.first.t, data.experience.second.s)
 
         ## update value function
-        # v_loss = update_value(value, target_value, value_opt, batch)
-        # vx_loss = 0.0
         v_loss, vx_loss, vxx_loss = update_value(value, target_value, value_opt, batch)
         ## update target network
         target_value = soft_update(value, target_value, tau)
