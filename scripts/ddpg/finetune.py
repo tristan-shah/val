@@ -46,63 +46,8 @@ class Value(nnx.Module):
     def __call__(self, x: Array):
         return self.layers(x)
 
-
-# class ResidualBlock(nnx.Module):
-#     def __init__(self, dim: int, activation: Callable, rngs: nnx.Rngs):
-#         super().__init__()
-#         self.fc1 = nnx.Linear(dim, dim, rngs=rngs)
-#         self.fc2 = nnx.Linear(dim, dim, rngs=rngs)
-#         self.activation = activation
-
-#     def __call__(self, x: Array) -> Array:
-#         residual = x
-#         x = self.activation(self.fc1(x))
-#         x = self.fc2(x)
-#         return self.activation(x + residual)
-
-# class ResidualBlock(nnx.Module):
-#     def __init__(self, dim, activation, rngs):
-#         super().__init__()
-#         self.norm = nnx.LayerNorm(dim, rngs = rngs)
-#         self.fc1  = nnx.Linear(dim, dim, rngs=rngs)
-#         self.fc2  = nnx.Linear(dim, dim, rngs=rngs)
-#         self.activation = activation
-
-#     def __call__(self, x):
-#         h = self.norm(x)
-#         h = self.activation(self.fc1(h))
-#         h = self.fc2(h)
-#         return x + h
-
-# class Value(nnx.Module):
-#     def __init__(
-#         self, 
-#         rngs: nnx.Rngs,
-#         input_dim: int, 
-#         hidden_dim: int, 
-#         num_layers: int, 
-#         activation: Callable,
-#     ):
-#         super().__init__()
-#         layers = []
-
-#         # Input layer
-#         layers.append(nnx.Linear(input_dim, hidden_dim, rngs=rngs))
-#         layers.append(activation)
-
-#         # Residual hidden layers
-#         for _ in range(num_layers):
-#             layers.append(ResidualBlock(hidden_dim, activation, rngs))
-
-#         # Output layer
-#         layers.append(nnx.Linear(hidden_dim, 1, rngs=rngs))
-
-#         self.layers = nnx.Sequential(*layers)
-
-#     def __call__(self, x: Array) -> Array:
-#         return self.layers(x)
-
 # def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: Callable, gamma: float, grad_penalty: float, hess_penalty: float):
+
 #     batch_normalize = jax.jit(jax.vmap(normalize))
 
 #     @nnx.jit
@@ -173,7 +118,7 @@ def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: C
         '''
         computing value gradient update
         '''
-        ## compute policy gradient
+        # ## compute policy gradient
         K = batch_pi_x(x)
         ## compute dynamics gradients
         fx, fu = batch_linearize_step(x, u)
@@ -225,9 +170,11 @@ def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: C
             
             v_loss = jnp.mean(optax.huber_loss(v, v_target))
             vx_loss = jnp.mean(optax.huber_loss(vx, vx_target))
+            # vx_loss = 0.0
             # vxx_loss = jnp.mean(optax.huber_loss(vxx, vxx_target))
             vxx_loss = 0.0
-            loss = v_loss + vx_loss * grad_penalty# + vxx_loss * hess_penalty
+
+            loss = v_loss + vx_loss * grad_penalty + vxx_loss * hess_penalty
             
             aux = (v_loss, vx_loss, vxx_loss)
             return loss, aux
@@ -246,20 +193,14 @@ if __name__ == '__main__':
     rngs = nnx.Rngs(seed)
     key = jax.random.PRNGKey(seed)
 
-    episode_len = 400
-    dt = 0.05
     ## load in xml
     xml_path = 'xml/pendulum.xml'
+    dt = 0.05
     dyn = Dynamics(path = xml_path, dt = dt)
     step = make_step(dyn)
     batch_init_state = jax.vmap(init_pendulum_state)
     input_dim = len(normalize_pendulum_state(init_pendulum_state(key))) ## get the shape of the normalized state
     ctrl_dim = dyn.control_dim
-    
-    grad_penalty = 0.05
-    hess_penalty = 0.0
-    # grad_penalty = 0.0
-    # hess_penalty = 0.0
 
     ## hyperparameters of ddpg
     hidden_dim = 128
@@ -280,6 +221,16 @@ if __name__ == '__main__':
 
     ## can change this sampling batch size
     batch_size = 1024
+    ## value fxn hparams
+    value_hidden_dim = 1024 #256
+    value_num_layers = 5 #10
+    value_activation = nnx.gelu
+
+    ## loss weights
+    # grad_penalty = 0.0
+    # hess_penalty = 0.0005
+    grad_penalty = 0.05
+    hess_penalty = 0.0
 
     ## instantiating the buffer
     buffer = fbx.make_flat_buffer(
@@ -326,9 +277,6 @@ if __name__ == '__main__':
     pi = jax.jit(lambda _x: policy(normalize_pendulum_state(_x)))
 
     ## instantiate value function
-    value_hidden_dim = 128 #512
-    value_num_layers = 5 #10
-    value_activation = nnx.gelu
     value = Value(rngs, input_dim, hidden_dim = value_hidden_dim, num_layers = value_num_layers, activation = value_activation)
     target_value = nnx.clone(value)
 
@@ -398,7 +346,6 @@ if __name__ == '__main__':
         ## update target network
         target_value = soft_update(value, target_value, tau)
 
-        # print(f'Iteration = {i}, V Loss = {v_loss}, Vx Loss = {vx_loss}')
         print(f'Iteration = {i}, V Loss = {v_loss}, Vx Loss = {vx_loss}, Vxx Loss = {vxx_loss}')
         v_loss_hist.append(v_loss)
         vx_loss_hist.append(vx_loss)
