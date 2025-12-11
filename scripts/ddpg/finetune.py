@@ -219,17 +219,17 @@ if __name__ == '__main__':
     buffer_len = iterations * num_env * episode_len
     print(f'Buffer Length = {buffer_len}')
 
-    ## can change this sampling batch size
+
+    ## hyperparameters of value
     batch_size = 1024
-    ## value fxn hparams
     value_hidden_dim = 1024 #256
     value_num_layers = 5 #10
     value_activation = nnx.gelu
-
+    value_gamma = 0.8
     ## loss weights
     # grad_penalty = 0.0
     # hess_penalty = 0.0005
-    grad_penalty = 0.05
+    grad_penalty = 0.0
     hess_penalty = 0.0
 
     ## instantiating the buffer
@@ -261,13 +261,13 @@ if __name__ == '__main__':
 
     # === RESTORE THE BUFFER ===
     checkpointer = ocp.CheckpointManager(
-        directory = Path('buffers/pendulum_ddpg_dataset').resolve()
+        directory = Path('results/buffers/pendulum_ddpg_dataset').resolve()
     )
     buffer_state = checkpointer.restore(0, args = ocp.args.StandardRestore(buffer_state))
 
     ## load in pretrained ddpg
     manager = ocp.CheckpointManager(
-        directory = Path(f'checkpoints/hidden_dim={hidden_dim}-num_layers_critic={num_layers_critic}-grad_penalty=0.0-hess_penalty=0.0').resolve()
+        directory = Path(f'results/checkpoints/hidden_dim={hidden_dim}-num_layers_critic={num_layers_critic}-grad_penalty=0.0-hess_penalty=0.0').resolve()
     )
     ddpg = DDPG(rngs, normalize_pendulum_state, input_dim, ctrl_dim, hidden_dim, num_layers_critic, num_layers_policy, activation, critic_lr, policy_lr, gamma)
     ddpg_state = manager.restore(39900, args = ocp.args.StandardRestore(nnx.state(ddpg)))
@@ -324,7 +324,7 @@ if __name__ == '__main__':
     test_loss_hist = []
 
     train_steps = 100000
-    path = Path(f'offline/train_steps={train_steps}-grad_penalty={grad_penalty}-hess_penalty={hess_penalty}-value_hidden_dim={value_hidden_dim}-value_num_layers={value_num_layers}').resolve()
+    path = Path(f'results/offline/train_steps={train_steps}-gamma={value_gamma}-grad_p={grad_penalty}-hess_p={hess_penalty}-hidden_dim={value_hidden_dim}-num_layers={value_num_layers}').resolve()
 
     ## Create a checkpointer
     options = ocp.CheckpointManagerOptions(

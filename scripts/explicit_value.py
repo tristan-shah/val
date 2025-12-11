@@ -36,11 +36,10 @@ if __name__ == '__main__':
     policy_lr = 1e-4
     gamma = 0.8
 
-    path = Path(f'checkpoints/hidden_dim={hidden_dim}-num_layers_critic={num_layers_critic}-grad_penalty=0.0-hess_penalty=0.0').resolve()
-    manager = ocp.CheckpointManager(path)
-
     ddpg = DDPG(rngs, normalize_pendulum_state, input_dim, ctrl_dim, hidden_dim, num_layers_critic, num_layers_policy, activation, critic_lr, policy_lr, gamma)
 
+    path = Path(f'results/checkpoints/hidden_dim={hidden_dim}-num_layers_critic={num_layers_critic}-grad_penalty=0.0-hess_penalty=0.0').resolve()
+    manager = ocp.CheckpointManager(path)
     ddpg_state = manager.restore(39900, args = ocp.args.StandardRestore(nnx.state(ddpg)))
     nnx.update(ddpg, ddpg_state)
 
