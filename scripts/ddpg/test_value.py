@@ -19,7 +19,7 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(seed)
     rngs = nnx.Rngs(seed)
 
-    gamma = 0.99
+    gamma = 0.90
     episode_len = 400
     dt = 0.05
     dyn = Dynamics(path = 'xml/pendulum.xml', dt = dt)
@@ -38,38 +38,16 @@ if __name__ == '__main__':
     policy = ddpg.policy
 
     ## instantiate value function
-    value_hidden_dim = 256
-    value_num_layers = 10
+    value_hidden_dim = 128
+    value_num_layers = 5
     value_activation = nnx.gelu
     value = Value(rngs, input_dim, hidden_dim = value_hidden_dim, num_layers = value_num_layers, activation = value_activation)
 
-    path = Path('offline/train_steps=100000-value_grad-grad_penalty=0.05-value_hidden_dim=256-value_num_layers=10').resolve()
-    # path = Path('offline/train_steps=100000-value_grad-grad_penalty=0.0-value_hidden_dim=256-value_num_layers=10').resolve()
-    # path = Path('offline/train_steps=100000-grad_penalty=0.05-hess_penalty=5e-05-value_hidden_dim=256-value_num_layers=10').resolve()
+    # path = Path('old_offline/train_steps=100000-value_grad-grad_penalty=0.05-value_hidden_dim=256-value_num_layers=10').resolve()
+    path = Path('offline/train_steps=100000-grad_penalty=0.0-hess_penalty=0.0-value_hidden_dim=128-value_num_layers=5').resolve()
     manager = ocp.CheckpointManager(path.resolve())
     value_state = manager.restore(99500, args = ocp.args.StandardRestore(nnx.state(value)))
     nnx.update(value, value_state)
-
-    # without_penalty_test_loss_hist = jnp.load('offline/value_grad-grad_penalty=0.0-value_hidden_dim=256-value_num_layers=10/test_loss_hist.npy')
-    without_penalty_test_loss_hist = jnp.load('offline/train_steps=100000-value_grad-grad_penalty=0.0-value_hidden_dim=256-value_num_layers=10/test_loss_hist.npy')
-    hess_penalty_test_loss_hist = jnp.load('offline/train_steps=100000-grad_penalty=0.05-hess_penalty=5e-05-value_hidden_dim=256-value_num_layers=10/test_loss_hist.npy')
-    test_loss_hist = jnp.load(path / 'test_loss_hist.npy')
-
-    fig, ax = plt.subplots(1, 1)
-    ax.set_title('Error From True Value Function')
-    ax.set_xlabel('Test Iteration')
-    ax.set_ylabel('Log MSE Error')
-
-    ax.plot(jnp.log(without_penalty_test_loss_hist), label = 'Vanilla')
-    ax.plot(jnp.log(test_loss_hist), label = 'Gradient Penalty')
-    ax.plot(jnp.log(hess_penalty_test_loss_hist), label = 'Gradient and Hessian')
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig('gradient_penalty.png', dpi = 300)
-    plt.show()
-
-
-
 
 
     '''
@@ -101,7 +79,7 @@ if __name__ == '__main__':
     z = jax.vmap(normalize_pendulum_state)(grid_points)
 
     V_true = jax.vmap(compute_true_value)(grid_points)[:, 0]
-    V_learned = jax.vmap(value)(z)
+    # V_learned = jax.vmap(value)(z)
 
     fig, ax = plt.subplots(1, 1)
     ax.set_title(f'Value Function Landscape for ' + r'$\dot\theta = $' + f'{theta_dot} (rad/s)')
@@ -109,7 +87,7 @@ if __name__ == '__main__':
     ax.set_ylabel('Value')
 
     ax.plot(theta_grid, V_true, label = 'True Value')
-    ax.plot(theta_grid, V_learned, label = 'Learned Value')
+    # ax.plot(theta_grid, V_learned, label = 'Learned Value')
 
     ax.legend()
     fig.savefig('test.png', dpi = 300)

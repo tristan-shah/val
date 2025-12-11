@@ -34,7 +34,7 @@ if __name__ == '__main__':
     activation = nnx.gelu
     critic_lr = 1e-3
     policy_lr = 1e-4
-    gamma = 0.99
+    gamma = 0.8
 
     path = Path(f'checkpoints/hidden_dim={hidden_dim}-num_layers_critic={num_layers_critic}-grad_penalty=0.0-hess_penalty=0.0').resolve()
     manager = ocp.CheckpointManager(path)
@@ -71,17 +71,17 @@ if __name__ == '__main__':
     
     ## select a state
     xt = jnp.zeros(dyn.state_dim)
-    xt = xt.at[0].set(1.5)
+    xt = xt.at[0].set(3.5)
     xt = xt.at[1].set(2.0)
     theta_min, theta_max = -2 * jnp.pi, 2.0 * jnp.pi
 
-    # ## unroll a nominal
-    # X, U = unroll_policy(xt)
-    # ## compute taylor expansions
-    # V_bar = compute_value(X, U, gamma)
-    # Vx, Vxx = compute_value_taylor(X, U, gamma)
-    # Vxx_ddp = compute_ddp_hessian(X, U, gamma)
-    # Vxx_ilqr = compute_ilqr_hessian(X, U, gamma)
+    ## unroll a nominal
+    X, U = unroll_policy(xt)
+    ## compute taylor expansions
+    V_bar = compute_value(X, U, gamma)
+    Vx, Vxx = compute_value_taylor(X, U, gamma)
+    Vxx_ddp = compute_ddp_hessian(X, U, gamma)
+    Vxx_ilqr = compute_ilqr_hessian(X, U, gamma)
 
     '''
     line plot (variable theta)
@@ -100,13 +100,13 @@ if __name__ == '__main__':
 
     ## evaluate true function over grid points
     V = jax.vmap(explicit_value)(grid_points)[:, 0]
-    V_learned = jax.vmap(learned_value)(grid_points)
+    # V_learned = jax.vmap(learned_value)(grid_points)
 
     ## evaluate second order taylor approximations
-    # delta_x = (grid_points - xt)
-    # V_approx = V_bar[0] + delta_x @ Vx[0] + 0.5 * einsum(delta_x, Vxx[0], delta_x, 'b x1, x1 x2, b x2 -> b')
-    # V_approx_ddp = V_bar[0] + delta_x @ Vx[0] + 0.5 * einsum(delta_x, Vxx_ddp[0], delta_x, 'b x1, x1 x2, b x2 -> b')
-    # V_approx_ilqr = V_bar[0] + delta_x @ Vx[0] + 0.5 * einsum(delta_x, Vxx_ilqr[0], delta_x, 'b x1, x1 x2, b x2 -> b')
+    delta_x = (grid_points - xt)
+    V_approx = V_bar[0] + delta_x @ Vx[0] + 0.5 * einsum(delta_x, Vxx[0], delta_x, 'b x1, x1 x2, b x2 -> b')
+    V_approx_ddp = V_bar[0] + delta_x @ Vx[0] + 0.5 * einsum(delta_x, Vxx_ddp[0], delta_x, 'b x1, x1 x2, b x2 -> b')
+    V_approx_ilqr = V_bar[0] + delta_x @ Vx[0] + 0.5 * einsum(delta_x, Vxx_ilqr[0], delta_x, 'b x1, x1 x2, b x2 -> b')
 
 
     '''
@@ -129,11 +129,11 @@ if __name__ == '__main__':
     ax.set_ylim(V.min(), V.max())
     
     ax.plot(theta_grid, V, label = 'Value')
-    ax.plot(theta_grid, V_learned, label = 'Learned Value')
-    # ax.scatter(xt[0], V_bar[0], c = 'black', label = 'Expansion Point', s = 10)
-    # ax.plot(theta_grid, V_approx, label = 'True Hessian', color = 'red')
-    # ax.plot(theta_grid, V_approx_ddp, label = 'DDP Hessian', color = 'orange')
-    # ax.plot(theta_grid, V_approx_ilqr, label = 'iLQR Hessian', color = 'purple')
+    # ax.plot(theta_grid, V_learned, label = 'Learned Value')
+    ax.scatter(xt[0], V_bar[0], c = 'black', label = 'Expansion Point', s = 10)
+    ax.plot(theta_grid, V_approx, label = 'True Hessian', color = 'red')
+    ax.plot(theta_grid, V_approx_ddp, label = 'DDP Hessian', color = 'orange')
+    ax.plot(theta_grid, V_approx_ilqr, label = 'iLQR Hessian', color = 'purple')
 
     ax.legend()
     fig.savefig('explicit_value.png', dpi = 300)
