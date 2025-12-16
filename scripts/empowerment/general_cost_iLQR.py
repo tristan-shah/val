@@ -152,10 +152,10 @@ if __name__ == '__main__':
 
     ## cost parameters
     # angle_penalty = 20.0
-    # velocity_penalty = 0.5
+    # velocity_penalty = 0.05
 
     angle_penalty = 2.0
-    velocity_penalty = 0.05
+    velocity_penalty = 0.0
 
     ## instantiate dynamics
     dyn = Dynamics(path = 'xml/pendulum.xml', integrator = integrator, dt = dt)
@@ -174,6 +174,9 @@ if __name__ == '__main__':
 
     xt = jnp.zeros(dyn.state_dim)
     theta_0 = 0.0
+    # theta_0 = 2.0
+    # theta_0 = 3.0
+
     xt = xt.at[0].set(theta_0)
 
     noise = 0.05
@@ -183,7 +186,7 @@ if __name__ == '__main__':
     X = ilqr.unroll(xt, U)
     
     cost = []
-    iterations = 500
+    iterations = 300
 
     for i in range(iterations):
         
