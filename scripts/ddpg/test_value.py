@@ -30,7 +30,7 @@ if __name__ == '__main__':
 
     ## load in pretrained ddpg
     manager = ocp.CheckpointManager(
-        directory = Path(f'checkpoints/hidden_dim={128}-num_layers_critic={4}-grad_penalty=0.0-hess_penalty=0.0').resolve()
+        directory = Path(f'results/checkpoints/hidden_dim={128}-num_layers_critic={4}-grad_penalty=0.0-hess_penalty=0.0').resolve()
     )
     ddpg = DDPG(rngs, normalize_pendulum_state, input_dim, ctrl_dim, 128, 4, 1, nnx.gelu, 1e-3, 1e-4, gamma)
     ddpg_state = manager.restore(39900, args = ocp.args.StandardRestore(nnx.state(ddpg)))
@@ -38,17 +38,22 @@ if __name__ == '__main__':
     policy = ddpg.policy
 
     ## instantiate value function
-    value_hidden_dim = 128
+    value_hidden_dim = 2048
     value_num_layers = 5
     value_activation = nnx.gelu
+    value_gamma = 0.8
+    # grad_p = 1.0
+    # hess_p = 0.5
+    grad_p = 0.05
+    hess_p = 0.005
+    value_lr = 0.0001
     value = Value(rngs, input_dim, hidden_dim = value_hidden_dim, num_layers = value_num_layers, activation = value_activation)
+    version = 99500
 
-    # path = Path('old_offline/train_steps=100000-value_grad-grad_penalty=0.05-value_hidden_dim=256-value_num_layers=10').resolve()
-    path = Path('offline/train_steps=100000-grad_penalty=0.0-hess_penalty=0.0-value_hidden_dim=128-value_num_layers=5').resolve()
+    path = Path(f'results/offline/act={value_activation.__name__}-gamma={value_gamma}-grad_p={grad_p}-hess_p={hess_p}-hidden_dim={value_hidden_dim}-num_layers=5-lr={value_lr}').resolve()
     manager = ocp.CheckpointManager(path.resolve())
-    value_state = manager.restore(99500, args = ocp.args.StandardRestore(nnx.state(value)))
+    value_state = manager.restore(version, args = ocp.args.StandardRestore(nnx.state(value)))
     nnx.update(value, value_state)
-
 
     '''
     line plot (variable theta)
@@ -62,7 +67,7 @@ if __name__ == '__main__':
     @jax.jit
     def compute_true_value(xt: Array):
         X, U = unroll_policy(xt)
-        return compute_value(X, U, gamma)
+        return compute_value(X, U, value_gamma)
     
     n_theta = 10000
     theta_dot = 2.0
@@ -79,7 +84,7 @@ if __name__ == '__main__':
     z = jax.vmap(normalize_pendulum_state)(grid_points)
 
     V_true = jax.vmap(compute_true_value)(grid_points)[:, 0]
-    # V_learned = jax.vmap(value)(z)
+    V_learned = jax.vmap(value)(z)
 
     fig, ax = plt.subplots(1, 1)
     ax.set_title(f'Value Function Landscape for ' + r'$\dot\theta = $' + f'{theta_dot} (rad/s)')
@@ -87,7 +92,7 @@ if __name__ == '__main__':
     ax.set_ylabel('Value')
 
     ax.plot(theta_grid, V_true, label = 'True Value')
-    # ax.plot(theta_grid, V_learned, label = 'Learned Value')
+    ax.plot(theta_grid, V_learned, label = 'Learned Value')
 
     ax.legend()
     fig.savefig('test.png', dpi = 300)
