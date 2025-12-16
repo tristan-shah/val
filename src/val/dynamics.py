@@ -155,6 +155,21 @@ def make_step(dyn: Dynamics):
     
     return jax.jit(step)
 
+def make_unroll(step: callable):
+
+    def unroll(x0: Array, U: Array):
+
+        def body_fn(x: Array, u: Array):
+            x_next = step(x, u)
+            return x_next, x_next
+        
+        _, X = jax.lax.scan(body_fn, x0, U)
+        X = jnp.concatenate([x0[None, :], X], axis = 0)
+
+        return X
+    
+    return jax.jit(unroll)
+
 def make_unroll_policy(step: callable, pi: callable, T: int):
     
     def unroll_policy(xt: Array):
