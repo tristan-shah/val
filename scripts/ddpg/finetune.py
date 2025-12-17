@@ -165,12 +165,12 @@ def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: C
             value_state = nnx.state(value)
 
             v = V(x, value_state)
-            vx = Vx(x, value_state)
+            # vx = Vx(x, value_state)
             # vxx = Vxx(x, value_state)
             
             v_loss = jnp.mean(optax.huber_loss(v, v_target))
-            vx_loss = jnp.mean(optax.huber_loss(vx, vx_target))
-            # vx_loss = 0.0
+            # vx_loss = jnp.mean(optax.huber_loss(vx, vx_target))
+            vx_loss = 0.0
             # vxx_loss = jnp.mean(optax.huber_loss(vxx, vxx_target))
             vxx_loss = 0.0
 
@@ -186,6 +186,27 @@ def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: C
         return v_loss, vx_loss, vxx_loss
 
     return update_value
+
+def load_ddpg():
+
+    ## hyperparameters of ddpg
+    hidden_dim = 128
+    num_layers_critic = 4
+    num_layers_policy = 1
+    activation = nnx.gelu
+    critic_lr = 1e-3
+    policy_lr = 1e-4
+    gamma = 0.99
+    # tau = 0.005
+
+    ## load in pretrained ddpg
+    manager = ocp.CheckpointManager(
+        directory = Path(f'results/checkpoints/hidden_dim={hidden_dim}-num_layers_critic={num_layers_critic}-grad_penalty=0.0-hess_penalty=0.0').resolve()
+    )
+    ddpg = DDPG(rngs, normalize_pendulum_state, input_dim, ctrl_dim, hidden_dim, num_layers_critic, num_layers_policy, activation, critic_lr, policy_lr, gamma)
+    ddpg_state = manager.restore(39900, args = ocp.args.StandardRestore(nnx.state(ddpg)))
+    nnx.update(ddpg, ddpg_state)
+    return ddpg
 
 
 @jax.jit
@@ -212,15 +233,6 @@ if __name__ == '__main__':
     input_dim = len(normalize_pendulum_state(init_pendulum_state(key))) ## get the shape of the normalized state
     ctrl_dim = dyn.control_dim
 
-    ## hyperparameters of ddpg
-    hidden_dim = 128
-    num_layers_critic = 4
-    num_layers_policy = 1
-    activation = nnx.gelu
-    critic_lr = 1e-3
-    policy_lr = 1e-4
-    gamma = 0.99
-    tau = 0.005
 
     ## buffer parameters
     iterations = 100
@@ -232,8 +244,8 @@ if __name__ == '__main__':
 
     ## hyperparameters of value
     batch_size = 1024
-    value_hidden_dim = 1024 #256
-    value_num_layers = 5 #10
+    value_hidden_dim = 1024
+    value_num_layers = 5
     value_activation = nnx.gelu
     value_gamma = 0.9
     ## loss weights
@@ -241,6 +253,7 @@ if __name__ == '__main__':
     # hess_penalty = 0.0005
     grad_penalty = 0.0
     hess_penalty = 0.0
+    tau = 0.005
 
     ## instantiating the buffer
     buffer = fbx.make_flat_buffer(
@@ -275,13 +288,8 @@ if __name__ == '__main__':
     )
     buffer_state = checkpointer.restore(0, args = ocp.args.StandardRestore(buffer_state))
 
-    ## load in pretrained ddpg
-    manager = ocp.CheckpointManager(
-        directory = Path(f'results/checkpoints/hidden_dim={hidden_dim}-num_layers_critic={num_layers_critic}-grad_penalty=0.0-hess_penalty=0.0').resolve()
-    )
-    ddpg = DDPG(rngs, normalize_pendulum_state, input_dim, ctrl_dim, hidden_dim, num_layers_critic, num_layers_policy, activation, critic_lr, policy_lr, gamma)
-    ddpg_state = manager.restore(39900, args = ocp.args.StandardRestore(nnx.state(ddpg)))
-    nnx.update(ddpg, ddpg_state)
+
+    ddpg = load_ddpg()
     policy = ddpg.policy
     ## make a policy
     pi = jax.jit(lambda _x: policy(normalize_pendulum_state(_x)))
@@ -297,7 +305,7 @@ if __name__ == '__main__':
 
     value_opt = nnx.Optimizer(value, tx)
     ## make the value update function
-    update_value = make_update_value(step, pi, pendulum_cost, normalize_pendulum_state, gamma, grad_penalty, hess_penalty)
+    update_value = make_update_value(step, pi, pendulum_cost, normalize_pendulum_state, value_gamma, grad_penalty, hess_penalty)
 
     '''
     testing
@@ -318,7 +326,7 @@ if __name__ == '__main__':
     @jax.jit
     def compute_true_value(xt: Array):
         X, U = unroll_policy(xt)
-        return compute_value(X, U, gamma)
+        return compute_value(X, U, value_gamma)
     
     ## evaluate true value over grid points
     num_test_points = 10000
