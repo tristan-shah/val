@@ -16,7 +16,7 @@ import orbax.checkpoint as ocp
 import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step, make_unroll_policy
-from val.pendulum import init_pendulum_state, normalize_pendulum_state, pendulum_cost
+from val.pendulum import init_pendulum_state, normalize_pendulum_state#, pendulum_cost
 from val.ddpg import SART, DDPG, Policy, build_hidden_layers, soft_update
 from val.utils import make_compute_value
 
@@ -187,6 +187,16 @@ def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: C
 
     return update_value
 
+
+@jax.jit
+def pendulum_cost(xt: Array, ut: Array):
+    theta = xt[0]
+    theta_dot = xt[1]
+    angle_cost = jnp.cos(theta)
+    vel_cost = 0.1 * theta_dot ** 2
+    act_cost = 1.0 * ut ** 2
+    return (angle_cost + vel_cost + act_cost).squeeze()
+
 if __name__ == '__main__':
 
     seed = 1
@@ -225,7 +235,7 @@ if __name__ == '__main__':
     value_hidden_dim = 1024 #256
     value_num_layers = 5 #10
     value_activation = nnx.gelu
-    value_gamma = 0.8
+    value_gamma = 0.9
     ## loss weights
     # grad_penalty = 0.0
     # hess_penalty = 0.0005

@@ -14,12 +14,21 @@ from val.ddpg import DDPG
 
 from finetune import Value
 
+@jax.jit
+def pendulum_cost(xt: Array, ut: Array):
+    theta = xt[0]
+    theta_dot = xt[1]
+    angle_cost = jnp.cos(theta)
+    vel_cost = 0.1 * theta_dot ** 2
+    act_cost = 0.5 * ut ** 2
+    return (angle_cost + vel_cost + act_cost).squeeze()
+
 if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
     rngs = nnx.Rngs(seed)
 
-    gamma = 0.90
+    gamma = 0.99
     episode_len = 400
     dt = 0.05
     dyn = Dynamics(path = 'xml/pendulum.xml', dt = dt)
@@ -37,23 +46,23 @@ if __name__ == '__main__':
     nnx.update(ddpg, ddpg_state)
     policy = ddpg.policy
 
-    ## instantiate value function
-    value_hidden_dim = 2048
-    value_num_layers = 5
-    value_activation = nnx.gelu
-    value_gamma = 0.8
-    # grad_p = 1.0
-    # hess_p = 0.5
-    grad_p = 0.05
-    hess_p = 0.005
-    value_lr = 0.0001
-    value = Value(rngs, input_dim, hidden_dim = value_hidden_dim, num_layers = value_num_layers, activation = value_activation)
-    version = 99500
+    # ## instantiate value function
+    # value_hidden_dim = 2048
+    # value_num_layers = 5
+    # value_activation = nnx.gelu
+    value_gamma = 0.98
+    # # grad_p = 1.0
+    # # hess_p = 0.5
+    # grad_p = 0.05
+    # hess_p = 0.005
+    # value_lr = 0.0001
+    # value = Value(rngs, input_dim, hidden_dim = value_hidden_dim, num_layers = value_num_layers, activation = value_activation)
+    # version = 99500
 
-    path = Path(f'results/offline/act={value_activation.__name__}-gamma={value_gamma}-grad_p={grad_p}-hess_p={hess_p}-hidden_dim={value_hidden_dim}-num_layers=5-lr={value_lr}').resolve()
-    manager = ocp.CheckpointManager(path.resolve())
-    value_state = manager.restore(version, args = ocp.args.StandardRestore(nnx.state(value)))
-    nnx.update(value, value_state)
+    # path = Path(f'results/offline/act={value_activation.__name__}-gamma={value_gamma}-grad_p={grad_p}-hess_p={hess_p}-hidden_dim={value_hidden_dim}-num_layers=5-lr={value_lr}').resolve()
+    # manager = ocp.CheckpointManager(path.resolve())
+    # value_state = manager.restore(version, args = ocp.args.StandardRestore(nnx.state(value)))
+    # nnx.update(value, value_state)
 
     '''
     line plot (variable theta)
@@ -84,7 +93,7 @@ if __name__ == '__main__':
     z = jax.vmap(normalize_pendulum_state)(grid_points)
 
     V_true = jax.vmap(compute_true_value)(grid_points)[:, 0]
-    V_learned = jax.vmap(value)(z)
+    # V_learned = jax.vmap(value)(z)
 
     fig, ax = plt.subplots(1, 1)
     ax.set_title(f'Value Function Landscape for ' + r'$\dot\theta = $' + f'{theta_dot} (rad/s)')
@@ -92,7 +101,7 @@ if __name__ == '__main__':
     ax.set_ylabel('Value')
 
     ax.plot(theta_grid, V_true, label = 'True Value')
-    ax.plot(theta_grid, V_learned, label = 'Learned Value')
+    # ax.plot(theta_grid, V_learned, label = 'Learned Value')
 
     ax.legend()
     fig.savefig('test.png', dpi = 300)

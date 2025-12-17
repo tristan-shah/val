@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step, make_unroll
 from val.utils import smooth_angle_wrap
+from val.empowerment import waterfilling_implicit, compute_power
 
 def make_compute_pendulum_state_cost(Q: Array, smoothing: float = 0.01):
 
@@ -49,6 +50,8 @@ def make_backward(traj_linearize: callable, traj_qx: callable, traj_qxx: callabl
 
         ## array shapes
         T = U.shape[0]
+        dx = X.shape[-1]
+        I = jnp.eye(dx)
 
         ## linearize dynamics
         fx, fu = traj_linearize(X[:-1], U)
@@ -61,9 +64,18 @@ def make_backward(traj_linearize: callable, traj_qx: callable, traj_qxx: callabl
         ru = traj_ru(U)
         ruu = traj_ruu(U)
 
+        P = 1.0
+
         def scan_fn(carry: tuple, t: int):
 
-            Vx, Vxx = carry
+            Vx, Vxx, L = carry
+
+            # eigs = jnp.linalg.eigvalsh(fu[t].T @ Vxx @ fu[t])#.clip(min = 1e-12)
+            eigs = jnp.linalg.eigvalsh(fu[t].T @ L @ fu[t]).clip(min = 1e-12)
+            # eigs = jnp.linalg.eigvalsh(fu[t].T @ F.T @ F @ fu[t]).clip(min = 1e-12)
+            v = waterfilling_implicit(eigs, P)
+            p = compute_power(v, eigs)
+            e = 0.5 * jnp.sum(jnp.log(1 + p * eigs))
 
             ## compute inverse term
             S = jnp.linalg.inv(ruu[t] + fu[t].T @ Vxx @ fu[t])
@@ -82,17 +94,23 @@ def make_backward(traj_linearize: callable, traj_qx: callable, traj_qxx: callabl
             ## force symmetry
             Vxx = 0.5 * (Vxx + Vxx.T)
 
-            carry = (Vx, Vxx)
+            # L = D.T @ L @ D + I
+            L = D.T @ L @ D + qxx[t]
+            # F = F @ D
 
-            return carry, (k, K)
+            carry = (Vx, Vxx, L)
+
+            return carry, (k, K, e)
         
         ## value gradient and hessian
         Vx_T = qx[-1]
         Vxx_T = qxx[-1]
-        init = (Vx_T, Vxx_T)
+        L_T = qxx[-1]
+        # F_T = I
+        init = (Vx_T, Vxx_T, L_T)
         
-        _, (k, K) = jax.lax.scan(scan_fn, init, jnp.arange(T), reverse = True)
-        return k, K
+        _, (k, K, e) = jax.lax.scan(scan_fn, init, jnp.arange(T), reverse = True)
+        return k, K, e
     
     return jax.jit(backward)
 
@@ -142,6 +160,23 @@ class iLQR:
 
         ## make the backward method
         self.backward = make_backward(self.traj_linearize, self.traj_qx, self.traj_qxx, self.traj_ru, self.traj_ruu)
+    
+    def __call__(self, X: Array, U: Array):
+
+        ## compute backward pass along nominal trajectory
+        k, K, e = self.backward(X, U)
+        ## find optimal alpha improvement
+        X_batch, U_batch = self.batch_forward(X, U, k, K, self.alphas)
+
+        ## evaluate every forward pass
+        J_batch = self.batch_traj_cost(X_batch, U_batch)
+        
+        idx = jnp.argmin(J_batch)
+        X = X_batch[idx]
+        U = U_batch[idx]
+        J = J_batch[idx]
+        alpha = self.alphas[idx]
+        return X, U, J, alpha, e
 
 if __name__ == '__main__':
 
@@ -152,10 +187,11 @@ if __name__ == '__main__':
 
     ## cost parameters
     # angle_penalty = 20.0
-    # velocity_penalty = 0.05
+    # velocity_penalty = 0.5
 
     angle_penalty = 2.0
-    velocity_penalty = 0.0
+    velocity_penalty = 0.1
+
 
     ## instantiate dynamics
     dyn = Dynamics(path = 'xml/pendulum.xml', integrator = integrator, dt = dt)
@@ -188,10 +224,13 @@ if __name__ == '__main__':
     cost = []
     iterations = 300
 
+    e_hist = []
+
     for i in range(iterations):
         
         ## compute backward pass along nominal trajectory
-        k, K = ilqr.backward(X, U)
+        k, K, e = ilqr.backward(X, U)
+        e_hist.append(e)
 
         ## find optimal alpha improvement
         X_batch, U_batch = ilqr.batch_forward(X, U, k, K, ilqr.alphas)
@@ -204,19 +243,33 @@ if __name__ == '__main__':
         X = X_batch[idx]
         U = U_batch[idx]
         J = J_batch[idx]
-        print(i, J, ilqr.alphas[idx])
+        print(i, J, ilqr.alphas[idx], jnp.sum(e), e[0])
         cost.append(J)
 
-    ## plotting cost and controls
-    fig, ax = plt.subplots(1, 2, figsize = (10, 5))
-    ax[0].set_ylabel('Trajectory Cost')
-    ax[0].set_xlabel('Iterations')
-    ax[0].plot(cost)
+    e_hist = jnp.stack(e_hist)
 
-    ax[1].set_xlabel('Timestep')
-    ax[1].set_ylabel('Control')
+    print(e_hist.shape)
+
+    ## plotting cost and controls
+    fig, ax = plt.subplots(1, 4, figsize = (15, 5))
+
+    ax[0].set_title('Control Signal')
+    ax[0].set_xlabel('Timestep')
     for i in range(U.shape[1]):
-        ax[1].plot(U[:, i])
+        ax[0].plot(U[:, i])
+
+    ax[1].set_title('Trajectory Cost')
+    ax[1].set_xlabel('Iterations')
+    ax[1].plot(cost)
+
+    ax[2].set_title('Sum of sum-empowerments')
+    ax[2].set_xlabel('Iterations')
+    ax[2].plot(e_hist.sum(axis = -1))
+
+    ax[3].set_title('Sum-empowerment at different timesteps')
+    ax[3].plot(e_hist[:, 0], label = 't = 0')
+    ax[3].plot(e_hist[:, 150], label = 't = 150')
+    # ax[3].plot(e_hist[:, 200])
 
     fig.tight_layout()
     fig.savefig('test.png', dpi = 300)

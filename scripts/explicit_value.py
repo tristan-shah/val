@@ -13,6 +13,17 @@ from val import Dynamics, make_step, make_unroll_policy
 from val.pendulum import init_pendulum_state, normalize_pendulum_state, pendulum_cost
 from val.utils import make_compute_value, make_compute_value_grad, make_compute_value_taylor, make_compute_ddp_hessian, make_compute_ilqr_hessian
 
+
+@jax.jit
+def pendulum_cost(xt: Array, ut: Array):
+    theta = xt[0]
+    theta_dot = xt[1]
+    angle_cost = jnp.cos(theta)
+    vel_cost = 0.1 * theta_dot ** 2
+    # act_cost = 0.5 * ut ** 2
+    act_cost = 1.0 * ut ** 2
+    return (angle_cost + vel_cost + act_cost).squeeze()
+
 from val.ddpg import DDPG
 if __name__ == '__main__':
     seed = 105
@@ -34,7 +45,7 @@ if __name__ == '__main__':
     activation = nnx.gelu
     critic_lr = 1e-3
     policy_lr = 1e-4
-    gamma = 0.8
+    gamma = 0.90
 
     ddpg = DDPG(rngs, normalize_pendulum_state, input_dim, ctrl_dim, hidden_dim, num_layers_critic, num_layers_policy, activation, critic_lr, policy_lr, gamma)
 
@@ -53,7 +64,6 @@ if __name__ == '__main__':
     unroll_policy = make_unroll_policy(step, pi, episode_len)
     ## taylor expansion
     compute_value = make_compute_value(pendulum_cost)
-    compute_value_grad = make_compute_value_grad(step, pi, pendulum_cost)
     compute_value_taylor = make_compute_value_taylor(step, pi, pendulum_cost)
     compute_ddp_hessian = make_compute_ddp_hessian(step, pi, pendulum_cost)
     compute_ilqr_hessian = make_compute_ilqr_hessian(step, pi, pendulum_cost)
@@ -70,7 +80,7 @@ if __name__ == '__main__':
     
     ## select a state
     xt = jnp.zeros(dyn.state_dim)
-    xt = xt.at[0].set(3.5)
+    xt = xt.at[0].set(0.15)
     xt = xt.at[1].set(2.0)
     theta_min, theta_max = -2 * jnp.pi, 2.0 * jnp.pi
 
@@ -107,18 +117,6 @@ if __name__ == '__main__':
     V_approx_ddp = V_bar[0] + delta_x @ Vx[0] + 0.5 * einsum(delta_x, Vxx_ddp[0], delta_x, 'b x1, x1 x2, b x2 -> b')
     V_approx_ilqr = V_bar[0] + delta_x @ Vx[0] + 0.5 * einsum(delta_x, Vxx_ilqr[0], delta_x, 'b x1, x1 x2, b x2 -> b')
 
-
-    '''
-    Error plot
-    '''
-    # fig, ax = plt.subplots(1, 1)
-    # ax.plot(theta_grid, jnp.log(jnp.abs(V_approx - V)), label = 'True Hessian')
-    # ax.plot(theta_grid, jnp.log(jnp.abs(V_approx_ddp - V)), label = 'DDP Hessian')
-    # ax.plot(theta_grid, jnp.log(jnp.abs(V_approx_ilqr - V)), label = 'iLQR Hessian')
-    # ax.legend()
-    # plt.show()
-
-
     fig, ax = plt.subplots(1, 1)
     ax.set_title(f'Value Function Landscape for ' + r'$\dot\theta = $' + f'{xt[1]} (rad/s)')
     ax.set_xlabel(r'$\theta$ (rad)')
@@ -140,9 +138,9 @@ if __name__ == '__main__':
 
 
 
-    '''
-    heatmap
-    '''
+    # '''
+    # heatmap
+    # '''
     # theta_min, theta_max = -2 * jnp.pi, 2 * jnp.pi
     # theta_dot_min, theta_dot_max = -2 * jnp.pi, 2 * jnp.pi
 
