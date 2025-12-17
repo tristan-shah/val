@@ -112,7 +112,7 @@ def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: C
         Vxx = jax.vmap(Vxx, in_axes = (0, None))
         return V, Vx, Vxx
     
-    # @nnx.jit
+    @nnx.jit
     def update_value(value: Value, target_value: Value, value_opt: nnx.Optimizer, batch: tuple):
 
         V, Vx, Vxx = make_V(value)
