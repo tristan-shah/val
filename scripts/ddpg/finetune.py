@@ -46,154 +46,159 @@ class Value(nnx.Module):
     def __call__(self, x: Array):
         return self.layers(x)
 
-def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: Callable, gamma: float, grad_penalty: float, hess_penalty: float):
-
-    batch_cost = jax.jit(jax.vmap(cost))
-    batch_normalize = jax.jit(jax.vmap(normalize))
-
-    @nnx.jit
-    def update_value(value: Value, target_value: Value, value_opt: nnx.Optimizer, batch: tuple):
-
-        x, u, _, t, x_next = batch
-
-        c = batch_cost(x, u)
-        z = batch_normalize(x)
-        z_next = batch_normalize(x_next)
-
-        v_ = jax.lax.stop_gradient(target_value(z_next))
-        # y = c + (1.0 - t) * gamma * v_
-        ## cosine requires unsqueezing
-        y = c[:, None] + (1.0 - t) * gamma * v_ 
-
-        def loss_fn(value):
-            v = value(z)
-            return jnp.mean(optax.huber_loss(v, y))
-        
-        loss, grad = nnx.value_and_grad(loss_fn)(value)
-        value_opt.update(grad)
-        return loss, 0.0, 0.0
-    
-    return update_value
-
 # def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: Callable, gamma: float, grad_penalty: float, hess_penalty: float):
 
+#     batch_cost = jax.jit(jax.vmap(cost))
+#     batch_normalize = jax.jit(jax.vmap(normalize))
 
-#     pi_x = jax.jacfwd(pi)
-#     pi_xx = jax.jacfwd(pi_x)
-
-#     linearize_step = jax.jacfwd(step, argnums = (0, 1))
-#     quadraticize_step = jax.jacfwd(linearize_step, argnums = (0, 1))
-
-#     linearize_cost = jax.jacrev(cost, argnums = (0, 1))
-#     quadraticize_cost = jax.jacrev(linearize_cost, argnums = (0, 1))
-
-#     batch_pi_x = jax.vmap(pi_x)
-#     batch_pi_xx = jax.vmap(pi_xx)
-
-#     batch_linearize_step = jax.vmap(linearize_step)
-#     batch_quadraticize_step = jax.vmap(quadraticize_step)
-
-#     batch_linearize_cost = jax.vmap(linearize_cost)
-#     batch_quadraticize_cost = jax.vmap(quadraticize_cost)
-
-#     def make_V(value: Value):
-
-#         graphdef = nnx.graphdef(value)
-
-#         def V(x: Array, state: nnx.State):
-#             return nnx.merge(graphdef, state)(normalize(x)).squeeze()
-        
-#         Vx = jax.jacrev(V)
-#         Vxx = jax.jacfwd(Vx)
-
-#         ## batchwise versions of value and gradient of value
-#         V = jax.vmap(V, in_axes = (0, None))
-#         Vx = jax.vmap(Vx, in_axes = (0, None))
-#         Vxx = jax.vmap(Vxx, in_axes = (0, None))
-#         return V, Vx, Vxx
-    
 #     @nnx.jit
 #     def update_value(value: Value, target_value: Value, value_opt: nnx.Optimizer, batch: tuple):
 
-#         V, Vx, Vxx = make_V(value)
+#         x, u, _, t, x_next = batch
 
-#         x, u, c, t, x_next = batch
+#         c = batch_cost(x, u)
+#         z = batch_normalize(x)
+#         z_next = batch_normalize(x_next)
 
-#         '''
-#         computing value gradient update
-#         '''
-#         # # ## compute policy gradient
-#         # K = batch_pi_x(x)
-#         # ## compute dynamics gradients
-#         # fx, fu = batch_linearize_step(x, u)
-#         # ## closed loop derivative
-#         # D = fx + einsum(fu, K, 't x1 u, t u x2 -> t x1 x2')
-#         # ## derivatives of cost
-#         # cx, cu = batch_linearize_cost(x, u)
-#         # cz = cx + einsum(cu, K, 't u, t u x -> t x')
+#         v_ = jax.lax.stop_gradient(target_value(z_next))
+#         # y = c + (1.0 - t) * gamma * v_
+#         ## cosine requires unsqueezing
+#         y = c[:, None] + (1.0 - t) * gamma * v_ 
 
-#         '''
-#         computing value hessian update
-#         '''
-#         # KK = batch_pi_xx(x)
-#         # (fxx, fxu), (fux, fuu) = batch_quadraticize_step(x, u)
-#         # (cxx, cxu), (cux, cuu) = batch_quadraticize_cost(x, u)
-#         # ## second order closed loop (total) derivative of dynamics
-#         # H = fxx \
-#         #     + einsum(fxu, K, 't x x1 u, t u x2 -> t x x1 x2') \
-#         #     + einsum(K, fux, 't u x1, t x u x2 -> t x x1 x2') \
-#         #     + einsum(K, fuu, K, 't u1 x1, t x u1 u2, t u2 x2 -> t x x1 x2') \
-#         #     + einsum(fu, KK, 't x u, t u x1 x2 -> t x x1 x2')
-#         # ## hessian of instantanious cost
-#         # czz = cxx \
-#         #     + einsum(cxu, K, 't x1 u, t u x2 -> t x1 x2') \
-#         #     + einsum(K, cux, 't u x1, t u x2 -> t x1 x2') \
-#         #     + einsum(K, cuu, K, 't u1 x1, t u1 u2, t u2 x2 -> t x1 x2') \
-#         #     + einsum(cu, KK, 't u, t u x1 x2 -> t x1 x2')
-
-#         ## compute next value and gradient
-#         v_next = jax.lax.stop_gradient(V(x_next, nnx.state(target_value)))
-#         # vx_next = jax.lax.stop_gradient(Vx(x_next, nnx.state(target_value)))
-#         # vxx_next = jax.lax.stop_gradient(Vxx(x_next, nnx.state(target_value)))
-
-#         ## compute regression targets
-#         v_target = c[:, 0] + (1.0 - t[:, 0]) * gamma * v_next
-#         # vx_target = cz + (1.0 - t) * gamma * einsum(D, vx_next, 'b x1 x2, b x1 -> b x2')
-
-#         # pullback = einsum(D, vxx_next, D, 'b x1 x3, b x1 x2, b x2 x4 -> b x3 x4')
-#         # pushforward = einsum(vx_next, H, 'b x, b x x1 x2 -> b x1 x2')
-#         # vxx_target = czz + (1.0 - t[:, :, None]) * gamma * (pullback + pushforward)
-
-#         def loss_fn(value: Value):
-
-#             value_state = nnx.state(value)
-
-#             v = V(x, value_state)
-#             # vx = Vx(x, value_state)
-#             # vxx = Vxx(x, value_state)
-            
-#             v_loss = jnp.mean(optax.huber_loss(v, v_target))
-#             # vx_loss = jnp.mean(optax.huber_loss(vx, vx_target))
-#             vx_loss = 0.0
-#             # vxx_loss = jnp.mean(optax.huber_loss(vxx, vxx_target))
-#             vxx_loss = 0.0
-
-#             loss = v_loss + vx_loss * grad_penalty + vxx_loss * hess_penalty
-            
-#             aux = (v_loss, vx_loss, vxx_loss)
-#             return loss, aux
+#         def loss_fn(value):
+#             v = value(z)
+#             return jnp.mean(optax.huber_loss(v, y))
         
-#         (loss, (v_loss, vx_loss, vxx_loss)), grad = nnx.value_and_grad(loss_fn, has_aux = True)(value)
-
+#         loss, grad = nnx.value_and_grad(loss_fn)(value)
 #         value_opt.update(grad)
-
-#         return v_loss, vx_loss, vxx_loss
-
+#         return loss, 0.0, 0.0
+    
 #     return update_value
 
+def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: Callable, gamma: float, grad_penalty: float, hess_penalty: float):
+
+
+    pi_x = jax.jacfwd(pi)
+    pi_xx = jax.jacfwd(pi_x)
+
+    linearize_step = jax.jacfwd(step, argnums = (0, 1))
+    quadraticize_step = jax.jacfwd(linearize_step, argnums = (0, 1))
+
+    linearize_cost = jax.jacrev(cost, argnums = (0, 1))
+    quadraticize_cost = jax.jacrev(linearize_cost, argnums = (0, 1))
+
+    batch_pi_x = jax.vmap(pi_x)
+    batch_pi_xx = jax.vmap(pi_xx)
+
+    batch_linearize_step = jax.vmap(linearize_step)
+    batch_quadraticize_step = jax.vmap(quadraticize_step)
+
+    batch_linearize_cost = jax.vmap(linearize_cost)
+    batch_quadraticize_cost = jax.vmap(quadraticize_cost)
+
+    def make_V(value: Value):
+
+        graphdef = nnx.graphdef(value)
+
+        def V(x: Array, state: nnx.State):
+            return nnx.merge(graphdef, state)(normalize(x)).squeeze()
+        
+        Vx = jax.jacrev(V)
+        Vxx = jax.jacfwd(Vx)
+
+        ## batchwise versions of value and gradient of value
+        V = jax.vmap(V, in_axes = (0, None))
+        Vx = jax.vmap(Vx, in_axes = (0, None))
+        Vxx = jax.vmap(Vxx, in_axes = (0, None))
+        return V, Vx, Vxx
+    
+    @nnx.jit
+    def update_value(value: Value, target_value: Value, value_opt: nnx.Optimizer, batch: tuple):
+
+        V, Vx, Vxx = make_V(value)
+
+        x, u, c, t, x_next = batch
+
+        '''
+        computing value gradient update
+        '''
+        # ## compute policy gradient
+        K = batch_pi_x(x)
+        ## compute dynamics gradients
+        fx, fu = batch_linearize_step(x, u)
+        ## closed loop derivative
+        D = fx + einsum(fu, K, 't x1 u, t u x2 -> t x1 x2')
+        ## derivatives of cost
+        cx, cu = batch_linearize_cost(x, u)
+        cz = cx + einsum(cu, K, 't u, t u x -> t x')
+
+        '''
+        computing value hessian update
+        '''
+        # KK = batch_pi_xx(x)
+        # (fxx, fxu), (fux, fuu) = batch_quadraticize_step(x, u)
+        # (cxx, cxu), (cux, cuu) = batch_quadraticize_cost(x, u)
+        # ## second order closed loop (total) derivative of dynamics
+        # H = fxx \
+        #     + einsum(fxu, K, 't x x1 u, t u x2 -> t x x1 x2') \
+        #     + einsum(K, fux, 't u x1, t x u x2 -> t x x1 x2') \
+        #     + einsum(K, fuu, K, 't u1 x1, t x u1 u2, t u2 x2 -> t x x1 x2') \
+        #     + einsum(fu, KK, 't x u, t u x1 x2 -> t x x1 x2')
+        # ## hessian of instantanious cost
+        # czz = cxx \
+        #     + einsum(cxu, K, 't x1 u, t u x2 -> t x1 x2') \
+        #     + einsum(K, cux, 't u x1, t u x2 -> t x1 x2') \
+        #     + einsum(K, cuu, K, 't u1 x1, t u1 u2, t u2 x2 -> t x1 x2') \
+        #     + einsum(cu, KK, 't u, t u x1 x2 -> t x1 x2')
+
+        ## compute next value and gradient
+        v_next = jax.lax.stop_gradient(V(x_next, nnx.state(target_value)))
+        vx_next = jax.lax.stop_gradient(Vx(x_next, nnx.state(target_value)))
+        # vxx_next = jax.lax.stop_gradient(Vxx(x_next, nnx.state(target_value)))
+
+        ## compute regression targets
+        v_target = c[:, 0] + (1.0 - t[:, 0]) * gamma * v_next
+        vx_target = cz + (1.0 - t) * gamma * einsum(D, vx_next, 'b x1 x2, b x1 -> b x2')
+
+        # pullback = einsum(D, vxx_next, D, 'b x1 x3, b x1 x2, b x2 x4 -> b x3 x4')
+        # pushforward = einsum(vx_next, H, 'b x, b x x1 x2 -> b x1 x2')
+        # vxx_target = czz + (1.0 - t[:, :, None]) * gamma * (pullback + pushforward)
+
+        def loss_fn(value: Value):
+
+            value_state = nnx.state(value)
+
+            v = V(x, value_state)
+            vx = Vx(x, value_state)
+            # vxx = Vxx(x, value_state)
+            
+            v_loss = jnp.mean(optax.huber_loss(v, v_target))
+            vx_loss = jnp.mean(optax.huber_loss(vx, vx_target))
+            # vx_loss = 0.0
+            # vxx_loss = jnp.mean(optax.huber_loss(vxx, vxx_target))
+            vxx_loss = 0.0
+
+            loss = v_loss + vx_loss * grad_penalty + vxx_loss * hess_penalty
+            
+            aux = (v_loss, vx_loss, vxx_loss)
+            return loss, aux
+        
+        (loss, (v_loss, vx_loss, vxx_loss)), grad = nnx.value_and_grad(loss_fn, has_aux = True)(value)
+
+        value_opt.update(grad)
+
+        return v_loss, vx_loss, vxx_loss
+
+    return update_value
+
 def load_ddpg():
+    
+    ##
+    input_dim = 3
+    ctrl_dim = 1
 
     ## hyperparameters of ddpg
+    rngs = nnx.Rngs(0)
     hidden_dim = 128
     num_layers_critic = 4
     num_layers_policy = 1
@@ -201,12 +206,12 @@ def load_ddpg():
     critic_lr = 1e-3
     policy_lr = 1e-4
     gamma = 0.99
-    # tau = 0.005
 
     ## load in pretrained ddpg
     manager = ocp.CheckpointManager(
         directory = Path(f'results/checkpoints/hidden_dim={hidden_dim}-num_layers_critic={num_layers_critic}-grad_penalty=0.0-hess_penalty=0.0').resolve()
     )
+
     ddpg = DDPG(rngs, normalize_pendulum_state, input_dim, ctrl_dim, hidden_dim, num_layers_critic, num_layers_policy, activation, critic_lr, policy_lr, gamma)
     ddpg_state = manager.restore(39900, args = ocp.args.StandardRestore(nnx.state(ddpg)))
     nnx.update(ddpg, ddpg_state)
@@ -255,7 +260,7 @@ if __name__ == '__main__':
     ## loss weights
     # grad_penalty = 0.0
     # hess_penalty = 0.0005
-    grad_penalty = 0.0
+    grad_penalty = 0.05
     hess_penalty = 0.0
     tau = 0.005
 
