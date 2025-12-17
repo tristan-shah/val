@@ -84,6 +84,7 @@ def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: C
     linearize_step = jax.jacfwd(step, argnums = (0, 1))
     quadraticize_step = jax.jacfwd(linearize_step, argnums = (0, 1))
 
+    batch_cost = jax.vmap(cost)
     linearize_cost = jax.jacrev(cost, argnums = (0, 1))
     quadraticize_cost = jax.jacrev(linearize_cost, argnums = (0, 1))
 
@@ -112,12 +113,13 @@ def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: C
         Vxx = jax.vmap(Vxx, in_axes = (0, None))
         return V, Vx, Vxx
     
-    @nnx.jit
+    # @nnx.jit
     def update_value(value: Value, target_value: Value, value_opt: nnx.Optimizer, batch: tuple):
 
         V, Vx, Vxx = make_V(value)
 
-        x, u, c, t, x_next = batch
+        x, u, _, t, x_next = batch
+        c = batch_cost(x, u)
 
         '''
         computing value gradient update
@@ -157,7 +159,8 @@ def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: C
         # vxx_next = jax.lax.stop_gradient(Vxx(x_next, nnx.state(target_value)))
 
         ## compute regression targets
-        v_target = c[:, 0] + (1.0 - t[:, 0]) * gamma * v_next
+        # v_target = c[:, 0] + (1.0 - t[:, 0]) * gamma * v_next
+        v_target = c + (1.0 - t[:, 0]) * gamma * v_next ## cosine cost
         vx_target = cz + (1.0 - t) * gamma * einsum(D, vx_next, 'b x1 x2, b x1 -> b x2')
 
         # pullback = einsum(D, vxx_next, D, 'b x1 x3, b x1 x2, b x2 x4 -> b x3 x4')
