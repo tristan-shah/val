@@ -112,7 +112,7 @@ def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: C
         Vxx = jax.vmap(Vxx, in_axes = (0, None))
         return V, Vx, Vxx
     
-    @nnx.jit
+    # @nnx.jit
     def update_value(value: Value, target_value: Value, value_opt: nnx.Optimizer, batch: tuple):
 
         V, Vx, Vxx = make_V(value)
@@ -319,97 +319,97 @@ if __name__ == '__main__':
     '''
     testing
     '''
-    # key, subkey = jax.random.split(key)
-    # # sample a batch from the buffer
-    # data = buffer.sample(buffer_state, subkey)
-    # # extract experience
-    # batch = (data.experience.first.s, data.experience.first.a, data.experience.first.r, data.experience.first.t, data.experience.second.s)
-    # v_loss, vx_loss, vxx_loss = update_value(value, target_value, value_opt, batch)
-    # print(v_loss, vx_loss, vxx_loss)
+    key, subkey = jax.random.split(key)
+    # sample a batch from the buffer
+    data = buffer.sample(buffer_state, subkey)
+    # extract experience
+    batch = (data.experience.first.s, data.experience.first.a, data.experience.first.r, data.experience.first.t, data.experience.second.s)
+    v_loss, vx_loss, vxx_loss = update_value(value, target_value, value_opt, batch)
+    print(v_loss, vx_loss, vxx_loss)
 
 
-    ## build functions
-    unroll_policy = make_unroll_policy(step, pi, episode_len)
-    compute_value = make_compute_value(pendulum_cost)
+    # ## build functions
+    # unroll_policy = make_unroll_policy(step, pi, episode_len)
+    # compute_value = make_compute_value(pendulum_cost)
 
-    @jax.jit
-    def compute_true_value(xt: Array):
-        X, U = unroll_policy(xt)
-        return compute_value(X, U, value_gamma)
+    # @jax.jit
+    # def compute_true_value(xt: Array):
+    #     X, U = unroll_policy(xt)
+    #     return compute_value(X, U, value_gamma)
     
-    ## evaluate true value over grid points
-    num_test_points = 10000
-    test_points = batch_init_state(jax.random.split(key, num_test_points))
-    normalized_test_points = jax.vmap(normalize_pendulum_state)(test_points)
-    true_value = jax.vmap(compute_true_value)(test_points)[:, 0]
+    # ## evaluate true value over grid points
+    # num_test_points = 10000
+    # test_points = batch_init_state(jax.random.split(key, num_test_points))
+    # normalized_test_points = jax.vmap(normalize_pendulum_state)(test_points)
+    # true_value = jax.vmap(compute_true_value)(test_points)[:, 0]
 
-    test_every = 500
+    # test_every = 500
 
-    v_loss_hist = []
-    vx_loss_hist = []
-    vxx_loss_hist = []
-    test_loss_hist = []
+    # v_loss_hist = []
+    # vx_loss_hist = []
+    # vxx_loss_hist = []
+    # test_loss_hist = []
 
-    train_steps = 100000
-    path = Path(f'results/offline/train_steps={train_steps}-gamma={value_gamma}-grad_p={grad_penalty}-hess_p={hess_penalty}-hidden_dim={value_hidden_dim}-num_layers={value_num_layers}').resolve()
+    # train_steps = 100000
+    # path = Path(f'results/offline/train_steps={train_steps}-gamma={value_gamma}-grad_p={grad_penalty}-hess_p={hess_penalty}-hidden_dim={value_hidden_dim}-num_layers={value_num_layers}').resolve()
 
-    ## Create a checkpointer
-    options = ocp.CheckpointManagerOptions(
-        preservation_policy = ocp.checkpoint_managers.preservation_policy.LatestN(4)
-    )
-    checkpointer = ocp.CheckpointManager(directory = path, options = options)
+    # ## Create a checkpointer
+    # options = ocp.CheckpointManagerOptions(
+    #     preservation_policy = ocp.checkpoint_managers.preservation_policy.LatestN(4)
+    # )
+    # checkpointer = ocp.CheckpointManager(directory = path, options = options)
 
-    for i in range(train_steps):
+    # for i in range(train_steps):
 
-        key, subkey = jax.random.split(key)
+    #     key, subkey = jax.random.split(key)
 
-        ## sample a batch from the buffer
-        data = buffer.sample(buffer_state, subkey)
-        ## extract experience
-        batch = (data.experience.first.s, data.experience.first.a, data.experience.first.r, data.experience.first.t, data.experience.second.s)
+    #     ## sample a batch from the buffer
+    #     data = buffer.sample(buffer_state, subkey)
+    #     ## extract experience
+    #     batch = (data.experience.first.s, data.experience.first.a, data.experience.first.r, data.experience.first.t, data.experience.second.s)
 
-        ## update value function
-        v_loss, vx_loss, vxx_loss = update_value(value, target_value, value_opt, batch)
-        ## update target network
-        target_value = soft_update(value, target_value, tau)
+    #     ## update value function
+    #     v_loss, vx_loss, vxx_loss = update_value(value, target_value, value_opt, batch)
+    #     ## update target network
+    #     target_value = soft_update(value, target_value, tau)
 
-        print(f'Iteration = {i}, V Loss = {v_loss}, Vx Loss = {vx_loss}, Vxx Loss = {vxx_loss}')
-        v_loss_hist.append(v_loss)
-        vx_loss_hist.append(vx_loss)
-        vxx_loss_hist.append(vxx_loss)
+    #     print(f'Iteration = {i}, V Loss = {v_loss}, Vx Loss = {vx_loss}, Vxx Loss = {vxx_loss}')
+    #     v_loss_hist.append(v_loss)
+    #     vx_loss_hist.append(vx_loss)
+    #     vxx_loss_hist.append(vxx_loss)
 
-        if i % test_every == 0:
-            pred_value = value(normalized_test_points).squeeze()
-            test_loss = jnp.mean(optax.squared_error(pred_value, true_value))
-            test_loss_hist.append(test_loss)
-            print(f'Test Loss = {test_loss}')
-            checkpointer.save(i, args = ocp.args.StandardSave(nnx.state(value)))
+    #     if i % test_every == 0:
+    #         pred_value = value(normalized_test_points).squeeze()
+    #         test_loss = jnp.mean(optax.squared_error(pred_value, true_value))
+    #         test_loss_hist.append(test_loss)
+    #         print(f'Test Loss = {test_loss}')
+    #         checkpointer.save(i, args = ocp.args.StandardSave(nnx.state(value)))
 
-            jnp.save(path / 'v_loss_hist.npy', jnp.array(v_loss_hist))
-            jnp.save(path / 'vx_loss_hist.npy', jnp.array(vx_loss_hist))
-            jnp.save(path / 'test_loss_hist.npy', jnp.array(test_loss_hist))
+    #         jnp.save(path / 'v_loss_hist.npy', jnp.array(v_loss_hist))
+    #         jnp.save(path / 'vx_loss_hist.npy', jnp.array(vx_loss_hist))
+    #         jnp.save(path / 'test_loss_hist.npy', jnp.array(test_loss_hist))
 
-            fig, ax = plt.subplots(1, 4, figsize = (20, 5))
-            ax[0].set_title('Value Loss')
-            ax[0].set_xlabel('Train Iteration')
-            ax[0].set_ylabel('Value Loss')
-            ax[0].plot(v_loss_hist)
+    #         fig, ax = plt.subplots(1, 4, figsize = (20, 5))
+    #         ax[0].set_title('Value Loss')
+    #         ax[0].set_xlabel('Train Iteration')
+    #         ax[0].set_ylabel('Value Loss')
+    #         ax[0].plot(v_loss_hist)
 
-            ax[1].set_title('Value Gradient Loss')
-            ax[1].set_xlabel('Train Iteration')
-            ax[1].set_ylabel('Value Gradient Loss')
-            ax[1].plot(vx_loss_hist)
+    #         ax[1].set_title('Value Gradient Loss')
+    #         ax[1].set_xlabel('Train Iteration')
+    #         ax[1].set_ylabel('Value Gradient Loss')
+    #         ax[1].plot(vx_loss_hist)
 
-            ax[2].set_title('Value Hessian Loss')
-            ax[2].set_xlabel('Train Iteration')
-            ax[2].set_ylabel('Value Hessian Loss')
-            ax[2].plot(vxx_loss_hist)
+    #         ax[2].set_title('Value Hessian Loss')
+    #         ax[2].set_xlabel('Train Iteration')
+    #         ax[2].set_ylabel('Value Hessian Loss')
+    #         ax[2].plot(vxx_loss_hist)
 
-            ax[3].set_title('Test Error')
-            ax[3].set_xlabel('Test Iteration')
-            ax[3].set_ylabel('Log Mean Squared Error')
-            ax[3].plot(jnp.log(jnp.array(test_loss_hist)))
+    #         ax[3].set_title('Test Error')
+    #         ax[3].set_xlabel('Test Iteration')
+    #         ax[3].set_ylabel('Log Mean Squared Error')
+    #         ax[3].plot(jnp.log(jnp.array(test_loss_hist)))
 
-            fig.tight_layout()
-            fig.savefig(path / 'test_loss_hist.png', dpi = 300)
-            plt.close(fig)
+    #         fig.tight_layout()
+    #         fig.savefig(path / 'test_loss_hist.png', dpi = 300)
+    #         plt.close(fig)
