@@ -43,12 +43,12 @@ if __name__ == '__main__':
     value_num_layers = 5
     value_activation = nnx.gelu
     value_gamma = 0.90
-    grad_p = 0.0
-    hess_p = 0.0
+    grad_p = 0.05
+    hess_p = 0.005
     value = Value(rngs, input_dim, hidden_dim = value_hidden_dim, num_layers = value_num_layers, activation = value_activation)
     
-    version = 72500
-    path = Path('results/offline/train_steps=100000-gamma=0.9-grad_p=0.0-hess_p=0.0-hidden_dim=1024-num_layers=5')
+    version = 17500
+    path = Path(f'results/offline/train_steps=100000-gamma=0.9-grad_p={grad_p}-hess_p={hess_p}-hidden_dim=1024-num_layers=5')
     manager = ocp.CheckpointManager(path.resolve())
     value_state = manager.restore(version, args = ocp.args.StandardRestore(nnx.state(value)))
     nnx.update(value, value_state)

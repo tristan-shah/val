@@ -31,10 +31,39 @@ def make_compute_controlled_LE(dyn: Dynamics, pi: callable, T: int):
         ## closed loop derivatives
         D = A + einsum(B, K, 't x1 u, t u x2 -> t x1 x2')
 
-        lce = estimate_lyapunov_hist(D, dt)
+        # lce = estimate_lyapunov_hist(D, dt)
+        lce = estimate_lyapunov_hist(A, dt)
         return lce
     
     return jax.jit(compute_controlled_LE)
+
+
+@jax.jit
+def sum_lyapunov_hist_singular(A: Array, dt: float):
+    log_svs = jnp.log(jnp.linalg.svd(A, compute_uv = False))
+    sum_log_svs = jnp.sum(log_svs, axis = 1)
+    cum_sum = jnp.cumsum(sum_log_svs)
+    t_idx = jnp.arange(1, A.shape[0] + 1)
+    return cum_sum / (t_idx * dt)
+
+def make_compute_controlled_LE_sum(dyn: Dynamics, pi: callable, T: int):
+
+    step = make_step(dyn)
+    traj_linearize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
+    unroll_policy = make_unroll_policy(step, pi, T)
+    traj_pi_x = jax.vmap(jax.jacfwd(pi))
+    dt = dyn.mjx_model.opt.timestep
+
+    def compute_controlled_LE_sum(xt: Array):
+        X, U = unroll_policy(xt)
+        A, B = traj_linearize(X[:-1], U)
+        K = traj_pi_x(X[:-1])
+
+        ## closed loop derivatives
+        D = A + einsum(B, K, 't x1 u, t u x2 -> t x1 x2')
+        return sum_lyapunov_hist_singular(D, dt)
+    
+    return jax.jit(compute_controlled_LE_sum)
 
 if __name__ == '__main__':
 
@@ -49,7 +78,7 @@ if __name__ == '__main__':
     xml_path = 'xml/pendulum.xml'
     dyn = Dynamics(path = xml_path, dt = dt)
     ## get the shape of the normalized state
-    input_dim = len(normalize_pendulum_state(init_pendulum_state(key))) 
+    input_dim = len(normalize_pendulum_state(init_pendulum_state(key)))
     ctrl_dim = dyn.control_dim
 
     ## load in ddpg
@@ -71,6 +100,9 @@ if __name__ == '__main__':
     ## build policy
     pi = lambda _x: policy(normalize_pendulum_state(_x))
 
+    xt = jnp.array([3.0, 0.0])
+
+
     # Create a grid over theta and theta_dot
     n_theta = 200
     n_theta_dot = 200
@@ -83,96 +115,109 @@ if __name__ == '__main__':
     Theta, Theta_dot = jnp.meshgrid(theta_grid, theta_dot_grid)
     grid_points = jnp.stack([Theta.ravel(), Theta_dot.ravel()], axis=1)
 
-    # lce = jax.vmap(compute_controlled_LE, in_axes = (None, 0, None, None, None))(dyn, grid_points, pi, pi_x, episode_len)
     compute_controlled_LE = make_compute_controlled_LE(dyn, pi, episode_len)
+    # compute_controlled_LE_sum = make_compute_controlled_LE_sum(dyn, pi, episode_len)
+
+    # lce = compute_controlled_LE(xt)
+    # lce_sum = compute_controlled_LE_sum(xt)
+
+    # fig, ax = plt.subplots(1, 1)
+    # ax.plot(lce.sum(axis = -1))
+    # ax.plot(lce_sum, linestyle = '--')
+    # plt.show()
+
+
+
     lce = jax.vmap(compute_controlled_LE)(grid_points)
     lce = jnp.reshape(lce, (n_theta_dot, n_theta, episode_len, dyn.state_dim))  # as before
 
-    '''
-    Last LE
-    '''
-    fig, ax = plt.subplots(1, 1)
-    ax.set_title(f'Controlled Sum FTLE, t = {episode_len * dt} (seconds)')
-    ax.set_xlabel(r'$\theta$ (rad)')
-    ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
+    # '''
+    # Last LE
+    # '''
+    # fig, ax = plt.subplots(1, 1)
+    # ax.set_title(f'Negative Feedback FTLE Sum, t = {episode_len * dt} (seconds)')
+    # ax.set_xlabel(r'$\theta$ (rad)')
+    # ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
 
-    im = ax.imshow(
-        lce[:, :, -1, 0] + lce[:, :, -1, 1],
-        extent=[theta_min, theta_max, theta_dot_min, theta_dot_max],
-        origin='lower',
-        cmap='viridis',
-        aspect='auto'
-    )
+    # im = ax.imshow(
+    #     -(lce[:, :, -1, 0] + lce[:, :, -1, 1]),
+    #     extent=[theta_min, theta_max, theta_dot_min, theta_dot_max],
+    #     origin='lower',
+    #     cmap='viridis',
+    #     aspect='auto'
+    # )
 
-    fig.colorbar(im, ax=ax)
+    # fig.colorbar(im, ax=ax)
 
-    fig.tight_layout()
-    fig.savefig('last_controlled_lyapunov.png', dpi = 300)
-    plt.show()
+    # fig.tight_layout()
+    # fig.savefig('last_controlled_lyapunov_sum.png', dpi = 300)
+    # plt.show()
 
     '''
     Row plot
     '''
-    # Select time steps to plot (e.g., 5 evenly spaced points)
-    # num_times = 5
-    # time_indices = jnp.linspace(0, episode_len-1, num_times, dtype = int)
+    ## Select time steps to plot (e.g., 5 evenly spaced points)
+    num_times = 5
+    time_indices = jnp.linspace(0, episode_len-1, num_times, dtype = int)
 
-    # fig, axes = plt.subplots(2, num_times, figsize=(4*num_times, 6))
+    fig, axes = plt.subplots(2, num_times, figsize=(4*num_times, 6))
+    fig.suptitle('Partial Derivative Controlled FLTE')
 
-    # for i, t in enumerate(time_indices):
-    #     # First row: LE 0
-    #     ax = axes[0, i]
-    #     im = ax.imshow(
-    #         lce[:, :, t, 0],
-    #         extent=[-3*jnp.pi, 3*jnp.pi, -8, 8],
-    #         origin='lower',
-    #         cmap='viridis',
-    #         aspect='auto'
-    #     )
-    #     ax.set_title(f'LE 0, t={t * dt} (s)')
-    #     if i == 0:
-    #         ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
-    #     fig.colorbar(im, ax=ax)
+    for i, t in enumerate(time_indices):
+        # First row: LE 0
+        ax = axes[0, i]
+        im = ax.imshow(
+            # lce[:, :, t, 0],
+            lce[:, :, t, 0].clip(min = 0.0) + lce[:, :, t, 1].clip(min = 0.0),
+            extent = [-3*jnp.pi, 3*jnp.pi, -8, 8],
+            origin = 'lower',
+            cmap = 'viridis',
+            aspect = 'auto'
+        )
+        ax.set_title(f'LE 0, t={round(t * dt, 3)} (s)')
+        if i == 0:
+            ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
+        fig.colorbar(im, ax=ax)
 
-    #     # Second row: LE 1
-    #     ax = axes[1, i]
-    #     im = ax.imshow(
-    #         lce[:, :, t, 1], 
-    #         extent=[-3*jnp.pi, 3*jnp.pi, -8, 8],
-    #         origin='lower',
-    #         cmap='viridis',
-    #         aspect='auto'
-    #     )
-    #     ax.set_title(f'LE 1, t={t * dt} (s)')
-    #     if i == 0:
-    #         ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
-    #     ax.set_xlabel(r'$\theta$ (rad)')
-    #     fig.colorbar(im, ax=ax)
+        # Second row: LE 1
+        ax = axes[1, i]
+        im = ax.imshow(
+            lce[:, :, t, 1], 
+            extent = [-3*jnp.pi, 3*jnp.pi, -8, 8],
+            origin = 'lower',
+            cmap = 'viridis',
+            aspect = 'auto'
+        )
+        ax.set_title(f'LE 1, t={round(t * dt, 3)} (s)')
+        if i == 0:
+            ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
+        ax.set_xlabel(r'$\theta$ (rad)')
+        fig.colorbar(im, ax=ax)
 
-    # fig.tight_layout()
-    # fig.savefig('controlled_lyapunov.png', dpi = 300)
-    # plt.show()
+    fig.tight_layout()
+    fig.savefig('chaotic_controlled_lyapunov_split.png', dpi = 300)
+    plt.show()
 
 
-    # fig, axes = plt.subplots(1, num_times, figsize=(4*num_times, 3))
+    # # fig, axes = plt.subplots(1, num_times, figsize=(4*num_times, 3))
 
-    # for i, t in enumerate(time_indices):
-    #     # First row: LE 0
-    #     ax = axes[i]
-    #     im = ax.imshow(
-    #         lce[:, :, t, 0] + lce[:, :, t, 1],
-    #         extent=[-3 * jnp.pi, 3 * jnp.pi, -8, 8],
-    #         origin='lower',
-    #         cmap='viridis',
-    #         aspect='auto'
-    #     )
-    #     ax.set_title(f'Sum of LE, t={t * dt} (s)')
-    #     if i == 0:
-    #         ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
-    #     fig.colorbar(im, ax=ax)
+    # # for i, t in enumerate(time_indices):
+    # #     # First row: LE 0
+    # #     ax = axes[i]
+    # #     im = ax.imshow(
+    # #         lce[:, :, t, 0] + lce[:, :, t, 1],
+    # #         extent=[-3 * jnp.pi, 3 * jnp.pi, -8, 8],
+    # #         origin='lower',
+    # #         cmap='viridis',
+    # #         aspect='auto'
+    # #     )
+    # #     ax.set_title(f'Sum of LE, t={t * dt} (s)')
+    # #     if i == 0:
+    # #         ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
+    # #     fig.colorbar(im, ax=ax)
 
-    #     ax.set_xlabel(r'$\theta$ (rad)')
+    # #     ax.set_xlabel(r'$\theta$ (rad)')
 
-    # fig.tight_layout()
-    # fig.savefig('controlled_lyapunov_sum.png', dpi = 300)
-    # plt.show()
+    # # fig.tight_layout()
+    # # fig.savefig('chaotic_controlled_lyapunov_sum.png', dpi = 300)
+    # # plt.show()

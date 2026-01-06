@@ -106,7 +106,6 @@ if __name__ == '__main__':
         jnp.repeat(theta_dot, n_theta)
     ], axis = -1)
 
-
     ## evaluate true function over grid points
     V = jax.vmap(explicit_value)(grid_points)[:, 0]
     # V_learned = jax.vmap(learned_value)(grid_points)

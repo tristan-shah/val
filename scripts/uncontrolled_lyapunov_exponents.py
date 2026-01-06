@@ -3,16 +3,32 @@ from jax import Array
 from jax import numpy as jnp
 import matplotlib.pyplot as plt
 
-from val import Dynamics, unroll
+from val import Dynamics, make_step, make_unroll
 from val.utils import estimate_lyapunov_hist
 
-def compute_uncontrolled_LE(dyn: Dynamics, xt: Array, U: Array):
-    X = unroll(dyn, xt, U)
-    A, _ = jax.vmap(dyn.linearize)(X[:-1], U)
-    lce = estimate_lyapunov_hist(A, dyn.mjx_model.opt.timestep)
-    return lce
+def make_compute_uncontrolled_LE(dyn: Dynamics, T: int):
 
-compute_uncontrolled_LE = jax.jit(compute_uncontrolled_LE, static_argnums = 0)
+    step = make_step(dyn)
+    traj_linearize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
+    unroll = make_unroll(step)
+    dt = dyn.mjx_model.opt.timestep
+    U = jnp.zeros((T, dyn.control_dim))
+
+    def compute_uncontrolled_LE(xt: Array):
+        X = unroll(xt, U)
+        A, _ = traj_linearize(X[:-1], U)
+        lce = estimate_lyapunov_hist(A, dt)
+        return lce
+    
+    return jax.jit(compute_uncontrolled_LE)
+
+# def compute_uncontrolled_LE(dyn: Dynamics, xt: Array, U: Array):
+#     X = unroll(dyn, xt, U)
+#     A, _ = jax.vmap(dyn.linearize)(X[:-1], U)
+#     lce = estimate_lyapunov_hist(A, dyn.mjx_model.opt.timestep)
+#     return lce
+
+# compute_uncontrolled_LE = jax.jit(compute_uncontrolled_LE, static_argnums = 0)
 
 if __name__ == '__main__':
     ## hyperparameters
@@ -39,8 +55,10 @@ if __name__ == '__main__':
     Theta, Theta_dot = jnp.meshgrid(theta_grid, theta_dot_grid)
     grid_points = jnp.stack([Theta.ravel(), Theta_dot.ravel()], axis=1)
 
+    compute_uncontrolled_LE = make_compute_uncontrolled_LE(dyn, episode_len)
 
-    lce = jax.vmap(compute_uncontrolled_LE, in_axes = (None, 0, None))(dyn, grid_points, U)
+    # lce = jax.vmap(compute_uncontrolled_LE, in_axes = (None, 0, None))(dyn, grid_points, U)
+    lce = jax.vmap(compute_uncontrolled_LE)(grid_points)
     lce = jnp.reshape(lce, (n_theta_dot, n_theta, episode_len, dyn.state_dim))  # as before
 
     '''

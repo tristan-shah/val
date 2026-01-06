@@ -217,7 +217,7 @@ if __name__ == '__main__':
 
     ## unroll the trajectory
     X = iemp.unroll(xt, U)
-    e = compute_pendulum_error(X)
+    # e = compute_pendulum_error(X)
 
     alpha = 10000.0
 
@@ -226,8 +226,8 @@ if __name__ == '__main__':
     
     for i in range(20):
 
-        k, K = iemp.backward(X, U, e)
-        X, U = iemp.forward(X, U, k, K, alpha)
+        # k, K = iemp.backward(X, U, e)
+        # X, U = iemp.forward(X, U, k, K, alpha)
 
         print(U.T)
         ax.plot(U)
