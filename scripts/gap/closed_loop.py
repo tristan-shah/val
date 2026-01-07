@@ -1,3 +1,7 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ['MUJOCO_GL'] = 'egl'
+
 import jax
 from jax import Array
 from jax import numpy as jnp
@@ -50,7 +54,7 @@ def make_compute_entropy(step: callable):
 
 
 class MPC:
-    def __init__(self, dyn: Dynamics, horizon: int, shots: int, eps: float, iterations: int):
+    def __init__(self, dyn: Dynamics, horizon: int, shots: int, eps: float, iterations: int, window: int):
 
         self.low = dyn.mjx_model.actuator_ctrlrange[:, 0]
         self.high = dyn.mjx_model.actuator_ctrlrange[:, 1]
@@ -61,6 +65,7 @@ class MPC:
         self.control_dim = dyn.control_dim
         self.eps = eps
         self.iterations = iterations
+        self.window = window
 
         self.compute_entropy = jax.jit(jax.vmap(make_compute_entropy(make_step(dyn)), in_axes = (None, 0)))
         self.U = jnp.zeros((horizon, dyn.control_dim))
@@ -83,7 +88,8 @@ class MPC:
 
             ## average over time
             # total_gap = jnp.sum(gap, axis = 1)
-            total_gap = jnp.mean(gap[:, 0:10], axis = 1)
+            # total_gap = jnp.mean(gap[:, 0:10], axis = 1)
+            total_gap = jnp.mean(gap[:, 0:self.window], axis = 1)
 
             idx = jnp.argmax(total_gap)
             ## select the best control sequence
@@ -101,32 +107,34 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(seed)
     dt = 0.01 ## double
     # dt = 0.05 ## single
-    horizon = 200
+    horizon = 600
     shots = 256
     eps = 0.1
     iterations = 4
     # steps = 600 ## single
     steps = 1500 ## double
+    window = 300
 
     # dyn = Dynamics('xml/pendulum.xml', dt = dt)
     dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
     step = make_step(dyn)
 
-    theta = 0.0
+    theta = 0.0 #3.14
     # x0 = jnp.array([theta, 0.0])
     x0 = jnp.array([theta, 0.0, 0.0, 0.0])
     xt = x0.copy()
 
-    # U = jnp.zeros((horizon, dyn.control_dim))
+
+    # U = jnp.zeros((steps, dyn.control_dim))
     # unroll = make_unroll(step)
     # X = unroll(xt, U)
     # dyn.render(X, path = 'double.mp4', distance = 5.0, skip = 2, lookat = jnp.array([0, 0, 2.2]))
 
+
+    mpc = MPC(dyn, horizon, shots, eps, iterations, window)
     X = jnp.zeros((steps + 1, dyn.state_dim))
     X = X.at[0].set(xt)
 
-    mpc = MPC(dyn, horizon, shots, eps, iterations)
-    
     hist = []
 
     for t in range(steps):
@@ -139,7 +147,7 @@ if __name__ == '__main__':
         hist.append(J)
 
     # dyn.render(X, path = f'single_pendulum-iterations={iterations}-dt={dt}-closed_loop-h={horizon}.mp4', skip = 1)
-    dyn.render(X, path = f'double_pendulum-iterations={iterations}-dt={dt}-closed_loop-h={horizon}.mp4', distance = 5.0, skip = 2, lookat = jnp.array([0, 0, 2.2]))
+    dyn.render(X, path = f'double_pendulum-window={window}-iterations={iterations}-dt={dt}-closed_loop-h={horizon}.mp4', distance = 5.0, skip = 2, lookat = jnp.array([0, 0, 2.2]))
 
     T = jnp.arange(0, steps)
 
@@ -149,5 +157,5 @@ if __name__ == '__main__':
     ax.plot(T * dt, hist)
     fig.tight_layout()
     # fig.savefig(f'single_pendulum-iterations={iterations}-dt={dt}-closed_loop-h={horizon}.png', dpi = 300)
-    fig.savefig(f'double_pendulum-iterations={iterations}-dt={dt}-closed_loop-h={horizon}.png', dpi = 300)
+    fig.savefig(f'double_pendulum-window={window}-iterations={iterations}-dt={dt}-closed_loop-h={horizon}.png', dpi = 300)
     plt.show()
