@@ -54,7 +54,7 @@ if __name__ == '__main__':
     dt = 0.05
     horizon = 500
     shots = 128
-    eps = 0.05
+    eps = 0.2
 
     dyn = Dynamics('xml/pendulum.xml', dt = dt)
     # dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
@@ -67,96 +67,129 @@ if __name__ == '__main__':
     compute_entropy = make_compute_entropy(step)
     batch_compute_entropy = jax.jit(jax.vmap(compute_entropy, in_axes = (None, 0)))
 
-    theta = 0.0
+    theta = 2.0
     x0 = jnp.array([theta, 0.0])
 
-    T = jnp.arange(0, horizon)
-    t = T * dt
-    # time_average = 1 / (jnp.flip(t) + dt)
+    T = jnp.arange(1, horizon + 1)
 
     U_bar = jnp.zeros((horizon, dyn.control_dim))
 
-    hist = []
-    for i in range(300):
-        key, subkey = jax.random.split(key)
-        U_batch = U_bar[None, :, :] + (jax.random.normal(subkey, (shots, horizon, dyn.control_dim)) * eps)
-        U_batch = U_batch.clip(low, high)
+    key, subkey = jax.random.split(key)
+    U_batch = U_bar[None, :, :] + (jax.random.normal(subkey, (shots, horizon, dyn.control_dim)) * eps)
+    U_batch = U_batch.clip(low, high)
 
-        ol_entropy, cl_entropy = batch_compute_entropy(x0, U_batch)
+    ol_entropy, cl_entropy = batch_compute_entropy(x0, U_batch)
 
-        gap = ol_entropy - cl_entropy
-        ## average over time
-        total_gap = jnp.mean(gap, axis = 1)
-        # total_gap = jnp.mean(ol_entropy, axis = 1)
+    ## NORMALIZE BY TIME
+    ol_entropy = ol_entropy / (jnp.flip(T) * dt)
+    cl_entropy = cl_entropy / (jnp.flip(T) * dt)
 
-        idx = jnp.argmax(total_gap)
-        U_bar = U_batch[idx]
+    fig, ax = plt.subplots(3, 1, figsize = (9, 6))
+    fig.suptitle(f'Initial Angle theta = {theta}')
+    window = 100
+    
+    # ax[0].set_title(r'$\ln \det Y_t$')
+    # ax[1].set_title(r'$\ln \det V_t$')
+    # ax[2].set_title(r'$\ln \det Y_t - \ln \det V_t$')
+    # ax[0].set_ylabel('nats')
+    # ax[1].set_ylabel('nats')
+    # ax[2].set_ylabel('nats')
 
-        print(i, total_gap.mean(), total_gap[idx])
-        hist.append(total_gap.mean())
+    ax[0].set_title(r'$\frac{1}{dt(T - t)}\ln \det Y_t$')
+    ax[1].set_title(r'$\frac{1}{dt(T - t)}\ln \det V_t$')
+    ax[2].set_title(r'$\frac{1}{dt(T - t)}(\ln \det Y_t - \ln \det V_t)$')
+    ax[2].set_xlabel('Timestep')
+    ax[0].set_ylabel('nats/s')
+    ax[1].set_ylabel('nats/s')
+    ax[2].set_ylabel('nats/s')
 
-    fig, ax = plt.subplots(2, 1, figsize = (10, 5))
-    fig.suptitle('Open Loop Predictive Sampling')
+    for i in range(shots):
+        ax[0].plot(ol_entropy[i, 0:window])
+        ax[1].plot(cl_entropy[i, 0:window])
+        ax[2].plot(ol_entropy[i, 0:window] - cl_entropy[i, 0:window])
 
-    ax[0].set_xlabel('Horizon Time (s)')
-    ax[0].set_ylabel('Control')
-
-    ax[0].set_ylim(low.item() * 1.2, high.item() * 1.2)
-
-    for k in range(shots):
-        ax[0].plot(t, U_batch[k])
-
-    ax[1].set_xlabel('PS Iteration')
-    ax[1].set_ylabel('Average Chaos Eating?')
-    # ax[1].set_ylabel('Open Loop Entropy')
-    ax[1].plot(hist)
     fig.tight_layout()
-    fig.savefig(f'ent_only_h={horizon}_open_loop.png', dpi = 300)
+    fig.savefig('trajectory.png', dpi = 300)
     plt.show()
 
-    X = unroll(x0, U_bar)
-    dyn.render(X, path = f'ent_only_h={horizon}_open_loop.mp4', skip = 1)
-
-
-    # print(ol_entropy)
-
-    # fig, ax = plt.subplots(1, 1)
-    # for i in range(shots):
-    #     ax.plot(ol_entropy[i] - cl_entropy[i], alpha = 0.2)
-    # plt.show()
 
 
 
+    # hist = []
+    # for i in range(100):
+    #     key, subkey = jax.random.split(key)
+    #     U_batch = U_bar[None, :, :] + (jax.random.normal(subkey, (shots, horizon, dyn.control_dim)) * eps)
+    #     U_batch = U_batch.clip(low, high)
 
+    #     ol_entropy, cl_entropy = batch_compute_entropy(x0, U_batch)
 
+    #     gap = ol_entropy - cl_entropy
+    #     gap = gap / (jnp.flip(T) * dt)
 
+    #     ## average over time
+    #     total_gap = jnp.mean(gap[:, 0:100], axis = 1)
+    #     # total_gap = jnp.mean(gap, axis = 1)
+    #     # total_gap = gap[:, 0]
 
-    # ol_entropy, cl_entropy = compute_entropy(x0, U)
-    
+    #     idx = jnp.argmax(total_gap)
+    #     U_bar = U_batch[idx]
 
-    # ol_entropy_rate = time_average * ol_entropy
-    # cl_entropy_rate = time_average * cl_entropy
+    #     print(i, total_gap.mean(), total_gap[idx])
+    #     hist.append(total_gap.mean())
 
-    # fig, ax = plt.subplots(3, 1, figsize = (9, 7))
-    # fig.suptitle(f'Initial Angle = {theta}')
-    
-    # ax[0].plot(t, ol_entropy, label = 'Open Loop')
-    # ax[0].plot(t, cl_entropy, label = 'Closed Loop')
-    # ax[0].set_title('Total Entropy (Not Averaged)')
-    # ax[0].set_ylabel('Entropy (nats)')
-    # ax[0].legend()
+    # fig, ax = plt.subplots(2, 1, figsize = (10, 5))
+    # fig.suptitle('Open Loop Predictive Sampling')
 
-    # ax[1].set_title('Averaged Entropy (Finite Time KSE)')
-    # ax[1].plot(t, ol_entropy_rate, label = 'Open Loop')
-    # ax[1].plot(t, cl_entropy_rate, label = 'Closed Loop')
-    # ax[1].set_ylabel('Entropy (nats)')
-    # ax[1].legend()
+    # ax[0].set_xlabel('Horizon Time (s)')
+    # ax[0].set_ylabel('Control')
 
-    # ax[2].set_title('Total Difference In Entropy')
-    # ax[2].plot(t, ol_entropy - cl_entropy)
-    # ax[2].set_xlabel('Time (s)')
-    # ax[2].set_ylabel('Entropy (nats)')
+    # ax[0].set_ylim(low.item() * 1.2, high.item() * 1.2)
 
+    # for k in range(shots):
+    #     ax[0].plot(U_batch[k])
+
+    # ax[1].set_xlabel('PS Iteration')
+    # ax[1].set_ylabel('Average Chaos Eating?')
+    # # ax[1].set_ylabel('Open Loop Entropy')
+    # ax[1].plot(hist)
     # fig.tight_layout()
-    # fig.savefig(f'theta={theta}.png', dpi = 300)
+    # fig.savefig(f'ent_only_h={horizon}_open_loop.png', dpi = 300)
     # plt.show()
+
+    # X = unroll(x0, U_bar)
+    # dyn.render(X, path = f'ent_only_h={horizon}_open_loop.mp4', skip = 1)
+
+
+
+
+
+
+
+
+    # # ol_entropy, cl_entropy = compute_entropy(x0, U)
+    # # ol_entropy_rate = time_average * ol_entropy
+    # # cl_entropy_rate = time_average * cl_entropy
+
+    # # fig, ax = plt.subplots(3, 1, figsize = (9, 7))
+    # # fig.suptitle(f'Initial Angle = {theta}')
+    
+    # # ax[0].plot(t, ol_entropy, label = 'Open Loop')
+    # # ax[0].plot(t, cl_entropy, label = 'Closed Loop')
+    # # ax[0].set_title('Total Entropy (Not Averaged)')
+    # # ax[0].set_ylabel('Entropy (nats)')
+    # # ax[0].legend()
+
+    # # ax[1].set_title('Averaged Entropy (Finite Time KSE)')
+    # # ax[1].plot(t, ol_entropy_rate, label = 'Open Loop')
+    # # ax[1].plot(t, cl_entropy_rate, label = 'Closed Loop')
+    # # ax[1].set_ylabel('Entropy (nats)')
+    # # ax[1].legend()
+
+    # # ax[2].set_title('Total Difference In Entropy')
+    # # ax[2].plot(t, ol_entropy - cl_entropy)
+    # # ax[2].set_xlabel('Time (s)')
+    # # ax[2].set_ylabel('Entropy (nats)')
+
+    # # fig.tight_layout()
+    # # fig.savefig(f'theta={theta}.png', dpi = 300)
+    # # plt.show()
