@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 from typing import Callable
 from pathlib import Path
@@ -137,35 +137,35 @@ def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: C
         '''
         computing value hessian update
         '''
-        # KK = batch_pi_xx(x)
-        # (fxx, fxu), (fux, fuu) = batch_quadraticize_step(x, u)
-        # (cxx, cxu), (cux, cuu) = batch_quadraticize_cost(x, u)
-        # ## second order closed loop (total) derivative of dynamics
-        # H = fxx \
-        #     + einsum(fxu, K, 't x x1 u, t u x2 -> t x x1 x2') \
-        #     + einsum(K, fux, 't u x1, t x u x2 -> t x x1 x2') \
-        #     + einsum(K, fuu, K, 't u1 x1, t x u1 u2, t u2 x2 -> t x x1 x2') \
-        #     + einsum(fu, KK, 't x u, t u x1 x2 -> t x x1 x2')
-        # ## hessian of instantanious cost
-        # czz = cxx \
-        #     + einsum(cxu, K, 't x1 u, t u x2 -> t x1 x2') \
-        #     + einsum(K, cux, 't u x1, t u x2 -> t x1 x2') \
-        #     + einsum(K, cuu, K, 't u1 x1, t u1 u2, t u2 x2 -> t x1 x2') \
-        #     + einsum(cu, KK, 't u, t u x1 x2 -> t x1 x2')
+        KK = batch_pi_xx(x)
+        (fxx, fxu), (fux, fuu) = batch_quadraticize_step(x, u)
+        (cxx, cxu), (cux, cuu) = batch_quadraticize_cost(x, u)
+        ## second order closed loop (total) derivative of dynamics
+        H = fxx \
+            + einsum(fxu, K, 't x x1 u, t u x2 -> t x x1 x2') \
+            + einsum(K, fux, 't u x1, t x u x2 -> t x x1 x2') \
+            + einsum(K, fuu, K, 't u1 x1, t x u1 u2, t u2 x2 -> t x x1 x2') \
+            + einsum(fu, KK, 't x u, t u x1 x2 -> t x x1 x2')
+        ## hessian of instantanious cost
+        czz = cxx \
+            + einsum(cxu, K, 't x1 u, t u x2 -> t x1 x2') \
+            + einsum(K, cux, 't u x1, t u x2 -> t x1 x2') \
+            + einsum(K, cuu, K, 't u1 x1, t u1 u2, t u2 x2 -> t x1 x2') \
+            + einsum(cu, KK, 't u, t u x1 x2 -> t x1 x2')
 
         ## compute next value and gradient
         v_next = jax.lax.stop_gradient(V(x_next, nnx.state(target_value)))
         vx_next = jax.lax.stop_gradient(Vx(x_next, nnx.state(target_value)))
-        # vxx_next = jax.lax.stop_gradient(Vxx(x_next, nnx.state(target_value)))
+        vxx_next = jax.lax.stop_gradient(Vxx(x_next, nnx.state(target_value)))
 
         ## compute regression targets
         # v_target = c[:, 0] + (1.0 - t[:, 0]) * gamma * v_next
         v_target = c + (1.0 - t[:, 0]) * gamma * v_next ## cosine cost
         vx_target = cz + (1.0 - t) * gamma * einsum(D, vx_next, 'b x1 x2, b x1 -> b x2')
 
-        # pullback = einsum(D, vxx_next, D, 'b x1 x3, b x1 x2, b x2 x4 -> b x3 x4')
-        # pushforward = einsum(vx_next, H, 'b x, b x x1 x2 -> b x1 x2')
-        # vxx_target = czz + (1.0 - t[:, :, None]) * gamma * (pullback + pushforward)
+        pullback = einsum(D, vxx_next, D, 'b x1 x3, b x1 x2, b x2 x4 -> b x3 x4')
+        pushforward = einsum(vx_next, H, 'b x, b x x1 x2 -> b x1 x2')
+        vxx_target = czz + (1.0 - t[:, :, None]) * gamma * (pullback + pushforward)
 
         def loss_fn(value: Value):
 
@@ -173,13 +173,13 @@ def make_update_value(step: Callable, pi: Callable, cost: Callable, normalize: C
 
             v = V(x, value_state)
             vx = Vx(x, value_state)
-            # vxx = Vxx(x, value_state)
+            vxx = Vxx(x, value_state)
             
             v_loss = jnp.mean(optax.huber_loss(v, v_target))
             vx_loss = jnp.mean(optax.huber_loss(vx, vx_target))
             # vx_loss = 0.0
-            # vxx_loss = jnp.mean(optax.huber_loss(vxx, vxx_target))
-            vxx_loss = 0.0
+            vxx_loss = jnp.mean(optax.huber_loss(vxx, vxx_target))
+            # vxx_loss = 0.0
 
             loss = v_loss + vx_loss * grad_penalty + vxx_loss * hess_penalty
             
@@ -264,7 +264,7 @@ if __name__ == '__main__':
     # grad_penalty = 0.0
     # hess_penalty = 0.0005
     grad_penalty = 0.05
-    hess_penalty = 0.0
+    hess_penalty = 0.005
     tau = 0.005
 
     ## instantiating the buffer
