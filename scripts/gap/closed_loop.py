@@ -104,22 +104,22 @@ class MPC:
 if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
-    # dt = 0.01 ## double
-    dt = 0.05 ## single
-    horizon = 200
+    dt = 0.01 ## double
+    # dt = 0.05 ## single
+    horizon = 600
     shots = 256
     eps = 0.1
     iterations = 5
-    steps = 600 ## single
-    # steps = 1500 ## double
+    # steps = 600 ## single
+    steps = 3000 ## double
 
-    dyn = Dynamics('xml/pendulum.xml', dt = dt)
-    # dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
+    # dyn = Dynamics('xml/pendulum.xml', dt = dt)
+    dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
     step = make_step(dyn)
 
     theta = 0.0
-    x0 = jnp.array([theta, 0.0])
-    # x0 = jnp.array([theta, 0.0, 0.0, 0.0])
+    # x0 = jnp.array([theta, 0.0])
+    x0 = jnp.array([theta, 0.0, 0.0, 0.0])
     xt = x0.copy()
 
     mpc = MPC(dyn, horizon, shots, eps, iterations)
@@ -137,20 +137,22 @@ if __name__ == '__main__':
         X = X.at[t+1].set(xt)
         hist = hist.at[t].set(J)
 
-    name = f'single_pendulum-iterations={iterations}-dt={dt}-closed_loop-h={horizon}'
-
+    # name = f'single_pendulum-iterations={iterations}-dt={dt}-closed_loop-h={horizon}'
+    name = f'double_pendulum-iterations={iterations}-dt={dt}-closed_loop-h={horizon}'
+    
     jnp.save(name + '.npy', hist)
-
-    dyn.render(X, path = name + '.mp4', skip = 1)
-    # dyn.render(X, path = f'double_pendulum-iterations={iterations}-dt={dt}-closed_loop-h={horizon}.mp4', distance = 5.0, skip = 2, lookat = jnp.array([0, 0, 2.2]))
 
     T = jnp.arange(0, steps)
 
     fig, ax = plt.subplots(1, 1)
     ax.set_xlabel('Time (s)')
-    ax.set_ylabel('Chaos Eating? (nat/s)')
+    ax.set_ylabel('nats / s')
     ax.plot(T * dt, hist)
     fig.tight_layout()
     fig.savefig(name + '.png', dpi = 300)
-    # fig.savefig(f'double_pendulum-iterations={iterations}-dt={dt}-closed_loop-h={horizon}.png', dpi = 300)
     plt.show()
+
+    # dyn.render(X, path = name + '.mp4', skip = 1)
+    dyn.render(X, path = name + '.mp4', distance = 5.0, skip = 2, lookat = jnp.array([0, 0, 2.2]))
+
+
