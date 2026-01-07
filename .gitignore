@@ -1,3 +1,5 @@
+*.png
+*.mp4
 results/*
 *.png
 old_offline/*

@@ -81,13 +81,9 @@ class MPC:
             T = jnp.arange(1, self.horizon + 1)
             gap = gap / (jnp.flip(T) * self.dt)
 
-            # fig, ax = plt.subplots(1, 1)
-            # for k in range(self.shots):
-            #     ax.plot(avg_gap[k, :])
-            # plt.show()
-
             ## average over time
-            total_gap = jnp.sum(gap, axis = 1)
+            # total_gap = jnp.sum(gap, axis = 1)
+            total_gap = jnp.mean(gap[:, 0:10], axis = 1)
 
             idx = jnp.argmax(total_gap)
             ## select the best control sequence
@@ -106,9 +102,9 @@ if __name__ == '__main__':
     dt = 0.01 ## double
     # dt = 0.05 ## single
     horizon = 200
-    shots = 128
-    eps = 0.05
-    iterations = 3
+    shots = 256
+    eps = 0.1
+    iterations = 4
     # steps = 600 ## single
     steps = 1500 ## double
 
@@ -126,7 +122,6 @@ if __name__ == '__main__':
     # X = unroll(xt, U)
     # dyn.render(X, path = 'double.mp4', distance = 5.0, skip = 2, lookat = jnp.array([0, 0, 2.2]))
 
-
     X = jnp.zeros((steps + 1, dyn.state_dim))
     X = X.at[0].set(xt)
 
@@ -143,7 +138,7 @@ if __name__ == '__main__':
         X = X.at[t+1].set(xt)
         hist.append(J)
 
-    # dyn.render(X, path = f'double_pendulum-iterations={iterations}-dt={dt}-closed_loop-h={horizon}.mp4', skip = 1)
+    # dyn.render(X, path = f'single_pendulum-iterations={iterations}-dt={dt}-closed_loop-h={horizon}.mp4', skip = 1)
     dyn.render(X, path = f'double_pendulum-iterations={iterations}-dt={dt}-closed_loop-h={horizon}.mp4', distance = 5.0, skip = 2, lookat = jnp.array([0, 0, 2.2]))
 
     T = jnp.arange(0, steps)
@@ -153,5 +148,6 @@ if __name__ == '__main__':
     ax.set_ylabel('Chaos Eating? (bits)')
     ax.plot(T * dt, hist)
     fig.tight_layout()
+    # fig.savefig(f'single_pendulum-iterations={iterations}-dt={dt}-closed_loop-h={horizon}.png', dpi = 300)
     fig.savefig(f'double_pendulum-iterations={iterations}-dt={dt}-closed_loop-h={horizon}.png', dpi = 300)
     plt.show()

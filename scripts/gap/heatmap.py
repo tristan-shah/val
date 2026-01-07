@@ -54,19 +54,22 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(seed)
     dt = 0.05
     horizon = 100
-    eps = 0.05
+    eps = 0.1
 
-    # dyn = Dynamics('xml/pendulum.xml', dt = dt)
-    dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
+    dyn = Dynamics('xml/pendulum.xml', dt = dt)
+    # dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
+    low = dyn.mjx_model.actuator_ctrlrange[:, 0]
+    high = dyn.mjx_model.actuator_ctrlrange[:, 1]
 
     compute_entropy = make_compute_entropy(make_step(dyn))
     batch_compute_entropy = jax.jit(jax.vmap(compute_entropy, in_axes = (0, None)))
 
-    U = jnp.zeros((horizon, dyn.control_dim))
+    U = jnp.zeros((horizon, dyn.control_dim)) + jax.random.normal(key, (horizon, dyn.control_dim)) * 0.05
+    U = U.clip(low, high)
     T = jnp.arange(1, horizon+1)
 
-    # thetas = [0.0, 0.5, 1.0, 2.0, 3.0, 3.14]
-    thetas = [0.0, 0.5, 1.0, 2.0, 3.0, jnp.pi]
+    thetas = [0.0, 0.5, 1.0, 2.0, 3.0, 3.14]
+    # thetas = [0.0, 0.5, 1.0, 2.0, 3.0, jnp.pi]
 
     fig, ax = plt.subplots(1, 1)
     fig.suptitle(r'$\frac{1}{T-t}(\ln\det Y_t - \ln\det V_t)$')
@@ -74,16 +77,38 @@ if __name__ == '__main__':
     ax.set_ylabel('Rate of Chaos Consumption (bits)')
 
     for theta in thetas:
-        # x0 = jnp.array([theta, 0.0])
-        x0 = jnp.array([theta, 0.0, 0.0, 0.0])
-
+        x0 = jnp.array([theta, 0.0])
+        # x0 = jnp.array([theta, 0.0, 0.0, 0.0])
         ol, cl = compute_entropy(x0, U)
 
         ax.plot(T * dt, (ol - cl) / jnp.flip(T*dt), label = f'{theta}')
+        # ax.plot(T * dt, (ol - cl), label = f'{theta}')
+        # ax.plot(T * dt, ol, label = f'{theta}')
 
     ax.legend(title = 'Initial Angle (rad)')
     fig.savefig('rate.png', dpi = 300)
     plt.show()
+
+
+
+
+    # step = make_step(dyn)
+    # traj_linerize = jax.jit(jax.vmap(jax.jacfwd(step, argnums = (0, 1))))
+    # unroll = make_unroll(step)
+
+    # x0 = jnp.array([3.14, 0.0])
+    # X = unroll(x0, U)
+    # fx, fu = traj_linerize(X[:-1], U)
+
+
+
+
+
+
+
+
+
+
 
 
     # # Create a grid over theta and theta_dot
