@@ -110,7 +110,7 @@ if __name__ == '__main__':
     # dt = 0.05 ## single
     horizon = 600 #1000
     # horizon = 50 ## single
-    shots = 256
+    shots = 512
     eps = 0.2
     iterations = 5
     # steps = 600 ## single
