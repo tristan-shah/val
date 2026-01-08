@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
@@ -114,6 +114,7 @@ if __name__ == '__main__':
     iterations = 5
     # steps = 600 ## single
     steps = 3000 ## double
+    window = 30
 
     # dyn = Dynamics('xml/pendulum.xml', dt = dt)
     dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
@@ -124,7 +125,7 @@ if __name__ == '__main__':
     x0 = jnp.array([theta, 0.0, 0.0, 0.0])
     xt = x0.copy()
 
-    mpc = MPC(dyn, horizon, shots, eps, iterations)
+    mpc = MPC(dyn, horizon, shots, eps, iterations, window)
     X = jnp.zeros((steps + 1, dyn.state_dim))
     X = X.at[0].set(xt)
 
@@ -140,7 +141,7 @@ if __name__ == '__main__':
         hist = hist.at[t].set(J)
 
     # name = f'single_pendulum-iterations={iterations}-dt={dt}-h={horizon}'
-    name = f'double_pendulum-shots-{shots}-eps={eps}-iterations={iterations}-dt={dt}-h={horizon}'
+    name = f'double_pendulum-window={window}-shots-{shots}-eps={eps}-iterations={iterations}-dt={dt}-h={horizon}'
     
     jnp.save(name + '.npy', hist)
 
