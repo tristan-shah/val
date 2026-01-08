@@ -25,11 +25,10 @@ def compute_vol(fx: Array, fu: Array):
         Y_t, V_t = carry
         fx_t, fu_t = inputs
 
-        # Y_t = Q + fx_t.T @ Y_t @ fx_t
-        # V_t = Q + fx_t.T @ V_t @ fx_t - fx_t.T @ V_t @ fu_t @ jnp.linalg.inv(R + fu_t.T @ V_t @ fu_t) @ fu_t.T @ V_t @ fx_t
-        Y_t = Q + gamma * fx_t.T @ Y_t @ fx_t
-        V_t = Q + gamma * fx_t.T @ V_t @ fx_t - gamma ** 2 * fx_t.T @ V_t @ fu_t @ jnp.linalg.inv(R + fu_t.T @ V_t @ fu_t) @ fu_t.T @ V_t @ fx_t
-
+        Y_t = Q + fx_t.T @ Y_t @ fx_t
+        V_t = Q + fx_t.T @ V_t @ fx_t - fx_t.T @ V_t @ fu_t @ jnp.linalg.inv(R + fu_t.T @ V_t @ fu_t) @ fu_t.T @ V_t @ fx_t
+        # Y_t = Q + gamma * fx_t.T @ Y_t @ fx_t
+        # V_t = Q + gamma * fx_t.T @ V_t @ fx_t - gamma ** 2 * fx_t.T @ V_t @ fu_t @ jnp.linalg.inv(R + fu_t.T @ V_t @ fu_t) @ fu_t.T @ V_t @ fx_t
 
         carry = (Y_t, V_t)
 
@@ -116,13 +115,13 @@ if __name__ == '__main__':
     # steps = 600 ## single
     steps = 3000 ## double
 
-    dyn = Dynamics('xml/pendulum.xml', dt = dt)
-    # dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
+    # dyn = Dynamics('xml/pendulum.xml', dt = dt)
+    dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
     step = make_step(dyn)
 
     theta = 0.0
-    x0 = jnp.array([theta, 0.0])
-    # x0 = jnp.array([theta, 0.0, 0.0, 0.0])
+    # x0 = jnp.array([theta, 0.0])
+    x0 = jnp.array([theta, 0.0, 0.0, 0.0])
     xt = x0.copy()
 
     mpc = MPC(dyn, horizon, shots, eps, iterations)
