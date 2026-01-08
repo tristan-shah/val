@@ -114,7 +114,7 @@ if __name__ == '__main__':
     iterations = 5
     # steps = 600 ## single
     steps = 3000 ## double
-    window = 30
+    window = 1
 
     # dyn = Dynamics('xml/pendulum.xml', dt = dt)
     dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
