@@ -81,27 +81,27 @@ if __name__ == '__main__':
     ol_entropy, cl_entropy = batch_compute_entropy(x0, U_batch)
 
     ## NORMALIZE BY TIME
-    ol_entropy = ol_entropy / (jnp.flip(T) * dt)
-    cl_entropy = cl_entropy / (jnp.flip(T) * dt)
+    # ol_entropy = ol_entropy / (jnp.flip(T) * dt)
+    # cl_entropy = cl_entropy / (jnp.flip(T) * dt)
 
     fig, ax = plt.subplots(3, 1, figsize = (9, 6))
     fig.suptitle(f'Initial Angle theta = {theta}')
     window = 100
     
-    # ax[0].set_title(r'$\ln \det Y_t$')
-    # ax[1].set_title(r'$\ln \det V_t$')
-    # ax[2].set_title(r'$\ln \det Y_t - \ln \det V_t$')
-    # ax[0].set_ylabel('nats')
-    # ax[1].set_ylabel('nats')
-    # ax[2].set_ylabel('nats')
+    ax[0].set_title(r'$\ln \det Y_t$')
+    ax[1].set_title(r'$\ln \det V_t$')
+    ax[2].set_title(r'$\ln \det Y_t - \ln \det V_t$')
+    ax[0].set_ylabel('nats')
+    ax[1].set_ylabel('nats')
+    ax[2].set_ylabel('nats')
 
-    ax[0].set_title(r'$\frac{1}{dt(T - t)}\ln \det Y_t$')
-    ax[1].set_title(r'$\frac{1}{dt(T - t)}\ln \det V_t$')
-    ax[2].set_title(r'$\frac{1}{dt(T - t)}(\ln \det Y_t - \ln \det V_t)$')
-    ax[2].set_xlabel('Timestep')
-    ax[0].set_ylabel('nats/s')
-    ax[1].set_ylabel('nats/s')
-    ax[2].set_ylabel('nats/s')
+    # ax[0].set_title(r'$\frac{1}{dt(T - t)}\ln \det Y_t$')
+    # ax[1].set_title(r'$\frac{1}{dt(T - t)}\ln \det V_t$')
+    # ax[2].set_title(r'$\frac{1}{dt(T - t)}(\ln \det Y_t - \ln \det V_t)$')
+    # ax[2].set_xlabel('Timestep')
+    # ax[0].set_ylabel('nats/s')
+    # ax[1].set_ylabel('nats/s')
+    # ax[2].set_ylabel('nats/s')
 
     for i in range(shots):
         ax[0].plot(ol_entropy[i, 0:window])

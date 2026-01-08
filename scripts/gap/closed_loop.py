@@ -1,6 +1,6 @@
-# import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-# os.environ['MUJOCO_GL'] = 'egl'
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
 from jax import Array
@@ -99,16 +99,15 @@ class MPC:
         U = U.at[-1].set(U[-2])
         self.U = U
         return ut, jnp.mean(total_gap)
-        # return ut, total_gap[idx]
 
 if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
     dt = 0.01 ## double
     # dt = 0.05 ## single
-    horizon = 600
+    horizon = 2000
     shots = 256
-    eps = 0.1
+    eps = 0.2
     iterations = 5
     # steps = 600 ## single
     steps = 3000 ## double
@@ -137,8 +136,8 @@ if __name__ == '__main__':
         X = X.at[t+1].set(xt)
         hist = hist.at[t].set(J)
 
-    # name = f'single_pendulum-iterations={iterations}-dt={dt}-closed_loop-h={horizon}'
-    name = f'double_pendulum-iterations={iterations}-dt={dt}-closed_loop-h={horizon}'
+    # name = f'single_pendulum-iterations={iterations}-dt={dt}-h={horizon}'
+    name = f'double_pendulum-shots-{shots}-eps={eps}-iterations={iterations}-dt={dt}-h={horizon}'
     
     jnp.save(name + '.npy', hist)
 
