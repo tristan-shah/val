@@ -1,3 +1,7 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ['MUJOCO_GL'] = 'egl'
+
 import jax
 from jax import Array
 from jax import numpy as jnp
@@ -133,7 +137,7 @@ class FeedbackMPC:
 
             ## compute entropy of each trajectory
             Y, V, K_batch = self.batch_compute_volume(fx_batch, fu_batch, self.alpha)
-            K_batch = K_batch
+            K_batch = K_batch * 0.0 ## turn off feedback
 
             ## compute entropy
             ol_entropy = jnp.linalg.slogdet(Y).logabsdet
@@ -183,21 +187,25 @@ if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
     dt = 0.05 ## single
-    shots = 512 #256
+    shots = 512
 
     ## works
     # horizon = 50
     # knots = 10
+
     ## works
     # horizon = 100 ## single
     # knots = 10
 
-    horizon = 200
-    knots = 20
+    ## sorta works
+    # horizon = 200
+    # knots = 20
+
+    ## not working
+    horizon = 300
+    knots = 100
 
     eps = 0.1
-    # eps = 0.05
-
     iterations = 5
     alpha = 1.0
 
@@ -209,8 +217,6 @@ if __name__ == '__main__':
     mpc = FeedbackMPC(dyn, horizon, shots, knots, eps, iterations, alpha)
 
     xt = jnp.zeros(dyn.state_dim)
-
-    # mpc(xt, key)
 
     X = jnp.zeros((steps + 1, dyn.state_dim))
     X = X.at[0].set(xt)
@@ -226,7 +232,7 @@ if __name__ == '__main__':
         X = X.at[t+1].set(xt)
         hist = hist.at[t].set(J)
 
-    name = f'single_pendulum-h={horizon}-shots={shots}-knots={knots}-eps={eps}-iterations={iterations}-alpha={alpha}-dt={dt}'
+    name = f'no_feedback_single_pendulum-h={horizon}-shots={shots}-knots={knots}-eps={eps}-iterations={iterations}-alpha={alpha}-dt={dt}'
     
     T = jnp.arange(0, steps)
 
