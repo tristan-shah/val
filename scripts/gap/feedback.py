@@ -1,6 +1,6 @@
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-os.environ['MUJOCO_GL'] = 'egl'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
 from jax import Array
@@ -137,7 +137,7 @@ class FeedbackMPC:
 
             ## compute entropy of each trajectory
             Y, V, K_batch = self.batch_compute_volume(fx_batch, fu_batch, self.alpha)
-            K_batch = K_batch * 0.0 ## turn off feedback
+            K_batch = K_batch ## turn off feedback
 
             ## compute entropy
             ol_entropy = jnp.linalg.slogdet(Y).logabsdet
@@ -147,16 +147,32 @@ class FeedbackMPC:
             information = ol_entropy - cl_entropy
             T = jnp.arange(1, horizon + 1)
             rate = information / (jnp.flip(T) * dt)
-            first_rate = rate[:, 0]
+            # J = rate[:, 0]
+            J = jnp.sum(information, axis = 1)
+
+            # '''
+            # MPPI implementation
+            # '''
+            # temp = 10.0
+            # # 1. Compute weights
+            # J_min = J.min()
+            # weights = jnp.exp(-(J - J_min) / temp)
+            # weights /= jnp.sum(weights)
+
+            # # 2. Update controls as weighted average
+            # U = jnp.sum(weights[:, None, None] * U_batch, axis = 0)
+
+
 
             ## select maximum rate
-            idx = jnp.argmax(first_rate)
+            idx = jnp.argmax(J)
 
             X = X_batch[idx]
             U = U_batch[idx]
             K = K_batch[idx]
 
-            # print(first_rate[idx])
+            # print(J[idx])
+
             # fig, ax = plt.subplots(2, 1)
             # ax[0].set_ylim(self.low.item(), self.high.item())
             # for i in range(shots):
@@ -180,43 +196,58 @@ class FeedbackMPC:
         self.U = U
         self.K = K
 
-        return ut, first_rate[idx] #jnp.mean(first_rate)
+        return ut, J[idx] #jnp.mean(first_rate)
 
 if __name__ == '__main__':
+
+    pendulum = 'double'
     
     seed = 0
     key = jax.random.PRNGKey(seed)
-    dt = 0.05 ## single
     shots = 512
 
-    ## works
-    # horizon = 50
-    # knots = 10
+    if pendulum == 'single':
+        dt = 0.05
+        # works
+        horizon = 50
+        knots = 10
 
-    ## works
-    # horizon = 100 ## single
-    # knots = 10
+        # # works
+        # horizon = 100 ## single
+        # knots = 10
 
-    ## sorta works
-    # horizon = 200
-    # knots = 20
+        # # sorta works
+        # horizon = 200
+        # knots = 20
 
-    ## not working
-    horizon = 300
-    knots = 100
+        # # not working
+        # horizon = 300
+        # knots = 30
+        steps = 500 ## single
 
-    eps = 0.1
+        dyn = Dynamics('xml/pendulum.xml', dt = dt)
+
+    elif pendulum == 'double':
+        dt = 0.01
+        ## double pendulum
+        horizon = 600
+        knots = 60
+        steps = 3000
+
+        dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
+
+
+    eps = 0.2
     iterations = 5
-    alpha = 1.0
+    alpha = 10.0
 
-    steps = 500 ## single
-
-    dyn = Dynamics('xml/pendulum.xml', dt = dt)
     step = make_step(dyn)
 
     mpc = FeedbackMPC(dyn, horizon, shots, knots, eps, iterations, alpha)
 
     xt = jnp.zeros(dyn.state_dim)
+
+    # mpc(xt, key)
 
     X = jnp.zeros((steps + 1, dyn.state_dim))
     X = X.at[0].set(xt)
@@ -232,7 +263,9 @@ if __name__ == '__main__':
         X = X.at[t+1].set(xt)
         hist = hist.at[t].set(J)
 
-    name = f'no_feedback_single_pendulum-h={horizon}-shots={shots}-knots={knots}-eps={eps}-iterations={iterations}-alpha={alpha}-dt={dt}'
+    # name = f'single_pendulum-h={horizon}-shots={shots}-knots={knots}-eps={eps}-iterations={iterations}-alpha={alpha}-dt={dt}'
+    name = f'{pendulum}_pendulum-h={horizon}-shots={shots}-knots={knots}-eps={eps}-iterations={iterations}-alpha={alpha}-dt={dt}'
+
     
     T = jnp.arange(0, steps)
 
@@ -244,4 +277,7 @@ if __name__ == '__main__':
     fig.savefig(name + '.png', dpi = 300)
     plt.show()
 
-    dyn.render(X, path = name + '.mp4', skip = 1)
+    if pendulum == 'single':
+        dyn.render(X, path = name + '.mp4', skip = 1)
+    elif pendulum == 'double':
+        dyn.render(X, path = name + '.mp4', distance = 5.0, skip = 2, lookat = jnp.array([0, 0, 2.2]))
