@@ -1,6 +1,6 @@
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-os.environ['MUJOCO_GL'] = 'egl'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
 from jax import Array
@@ -36,18 +36,17 @@ def compute_volume(fx: Array, fu: Array, alpha: float):
 
     Q = jnp.eye(dx)
     R = jnp.eye(du) * alpha
-    gamma = 1.0
 
     def scan_fn(carry: tuple[Array, Array], inputs: tuple[Array, Array]):
         
         Y_t, V_t = carry
         fx_t, fu_t = inputs
 
-        S_inv = jnp.linalg.inv(R + gamma * fu_t.T @ V_t @ fu_t)
+        S_inv = jnp.linalg.inv(R + fu_t.T @ V_t @ fu_t)
         
-        K_t = - gamma * S_inv @ fu_t.T @ V_t @ fx_t
-        Y_t = Q + gamma * fx_t.T @ Y_t @ fx_t
-        V_t = Q + gamma * fx_t.T @ V_t @ fx_t - (gamma**2) * fx_t.T @ V_t @ fu_t @ S_inv @ fu_t.T @ V_t @ fx_t
+        K_t = - S_inv @ fu_t.T @ V_t @ fx_t
+        Y_t = Q + fx_t.T @ Y_t @ fx_t
+        V_t = Q + fx_t.T @ V_t @ fx_t - fx_t.T @ V_t @ fu_t @ S_inv @ fu_t.T @ V_t @ fx_t
 
         carry = (Y_t, V_t)
 
@@ -80,7 +79,16 @@ def make_unroll_feedback(step: callable, low: Array, high: Array):
     return jax.jit(unroll_feedback)
 
 class FeedbackMPC:
-    def __init__(self, dyn: Dynamics, horizon: int, shots: int, knots: int, eps: float, iterations: int, alpha: float):
+    def __init__(
+            self, 
+            dyn: Dynamics, 
+            horizon: int, 
+            shots: int, 
+            knots: int, 
+            eps: float, 
+            iterations: int, 
+            alpha: float, 
+            objective: str):
 
         self.low = dyn.mjx_model.actuator_ctrlrange[:, 0]
         self.high = dyn.mjx_model.actuator_ctrlrange[:, 1]
@@ -92,6 +100,7 @@ class FeedbackMPC:
         self.eps = eps
         self.iterations = iterations
         self.alpha = alpha
+        self.objective = objective
 
         self.compute_k = make_compute_k(horizon, dyn.control_dim, shots, knots)
 
@@ -124,6 +133,7 @@ class FeedbackMPC:
             
             ## sample perturbations
             k_batch = self.compute_k(subkey) * self.eps
+            # k_batch = jax.random.normal(subkey, (self.shots, self.horizon, self.control_dim)) * self.eps
 
             ## apply perturbations to nominal action sequence
             U_batch = U[None, :, :] + k_batch
@@ -137,7 +147,8 @@ class FeedbackMPC:
 
             ## compute entropy of each trajectory
             Y, V, K_batch = self.batch_compute_volume(fx_batch, fu_batch, self.alpha)
-            K_batch = K_batch ## turn off feedback
+            # K_batch = K_batch * 0.0 ## turn off feedback
+            # K_batch = K_batch * 0.1
 
             ## compute entropy
             ol_entropy = jnp.linalg.slogdet(Y).logabsdet
@@ -147,22 +158,13 @@ class FeedbackMPC:
             information = ol_entropy - cl_entropy
             T = jnp.arange(1, horizon + 1)
             rate = information / (jnp.flip(T) * dt)
-            # J = rate[:, 0]
-            J = jnp.sum(information, axis = 1)
 
-            # '''
-            # MPPI implementation
-            # '''
-            # temp = 10.0
-            # # 1. Compute weights
-            # J_min = J.min()
-            # weights = jnp.exp(-(J - J_min) / temp)
-            # weights /= jnp.sum(weights)
-
-            # # 2. Update controls as weighted average
-            # U = jnp.sum(weights[:, None, None] * U_batch, axis = 0)
-
-
+            if self.objective == 'rate':
+                J = rate[:, 0]
+            elif self.objective == 'total_information':
+                J = jnp.sum(information, axis = 1)
+            else:
+                raise NameError
 
             ## select maximum rate
             idx = jnp.argmax(J)
@@ -172,7 +174,6 @@ class FeedbackMPC:
             K = K_batch[idx]
 
             # print(J[idx])
-
             # fig, ax = plt.subplots(2, 1)
             # ax[0].set_ylim(self.low.item(), self.high.item())
             # for i in range(shots):
@@ -181,7 +182,6 @@ class FeedbackMPC:
             # plt.show()
 
         ## select first action
-
         ut = U[0]
         ## shift over the plan by one action
         X = jnp.roll(X, shift = -1, axis = 0)
@@ -212,7 +212,7 @@ if __name__ == '__main__':
         horizon = 50
         knots = 10
 
-        # # works
+        # works
         # horizon = 100 ## single
         # knots = 10
 
@@ -231,19 +231,20 @@ if __name__ == '__main__':
         dt = 0.01
         ## double pendulum
         horizon = 600
-        knots = 60
+        knots = 50
         steps = 3000
 
         dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
 
 
-    eps = 0.2
+    eps = 0.1
     iterations = 5
-    alpha = 10.0
+    alpha = 100.0
+    objective = 'rate'
 
     step = make_step(dyn)
 
-    mpc = FeedbackMPC(dyn, horizon, shots, knots, eps, iterations, alpha)
+    mpc = FeedbackMPC(dyn, horizon, shots, knots, eps, iterations, alpha, objective)
 
     xt = jnp.zeros(dyn.state_dim)
 
@@ -263,9 +264,7 @@ if __name__ == '__main__':
         X = X.at[t+1].set(xt)
         hist = hist.at[t].set(J)
 
-    # name = f'single_pendulum-h={horizon}-shots={shots}-knots={knots}-eps={eps}-iterations={iterations}-alpha={alpha}-dt={dt}'
-    name = f'{pendulum}_pendulum-h={horizon}-shots={shots}-knots={knots}-eps={eps}-iterations={iterations}-alpha={alpha}-dt={dt}'
-
+    name = f'{objective}-{pendulum}_pendulum-h={horizon}-shots={shots}-knots={knots}-eps={eps}-iterations={iterations}-alpha={alpha}-dt={dt}'
     
     T = jnp.arange(0, steps)
 
