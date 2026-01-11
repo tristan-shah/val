@@ -9,8 +9,6 @@ from einops import einsum
 import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step, make_unroll
-# from val.info import make_compute_entropy
-
 
 @jax.jit
 def compute_volume(fx: Array, fu: Array):
@@ -64,7 +62,6 @@ def make_compute_entropy(step: callable):
     return jax.jit(compute_entropy)
 
 
-
 class MPC:
     def __init__(self, dyn: Dynamics, horizon: int, shots: int, eps: float, iterations: int, window: int = 1):
 
@@ -104,6 +101,7 @@ class MPC:
             ## average over time (usually just select the first one)
             J = rate[:, 0]
             # J = jnp.sum(information, axis = -1)
+            # J = jnp.sum(rate, axis = 1)
 
             # fig, ax = plt.subplots(2, 1)
             # ax[0].set_ylim(self.low.item(), self.high.item())
@@ -112,10 +110,17 @@ class MPC:
             #     ax[1].plot(information[i])
             # plt.show()
 
-            ## hard selection
             idx = jnp.argmax(J)
             U = U_batch[idx]
-            # print(J[idx])
+            print(J[idx])
+
+    
+        fig, ax = plt.subplots(2, 1)
+        ax[0].set_ylim(self.low.item(), self.high.item())
+        for i in range(shots):
+            ax[0].plot(U_batch[i])
+            ax[1].plot(information[i])
+        plt.show()
 
 
         ut = U[0]
@@ -129,59 +134,20 @@ class MPC:
 if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
-    dt = 0.01 ## double
-    # dt = 0.05 ## single
-    horizon = 600 #1000
-    # horizon = 300 ## single
-    shots = 1024 #256
-    eps = 0.1
-    iterations = 5
-    # steps = 500 ## single
-    steps = 3000 ## double
+    dt = 0.05 ## single
+    horizon = 100 ## single
+    shots = 128 #256
+    eps = 0.2
+    iterations = 100
+    steps = 500 ## single
     window = 1
 
-    # dyn = Dynamics('xml/pendulum.xml', dt = dt)
-    dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
+    dyn = Dynamics('xml/pendulum.xml', dt = dt)
     step = make_step(dyn)
-
-    theta = 0.0
-    x0 = jnp.zeros(dyn.state_dim)
-    xt = x0.copy()
+    
+    xt = jnp.zeros(dyn.state_dim)
+    xt = xt.at[0].set(0.0)
 
     mpc = MPC(dyn, horizon, shots, eps, iterations, window)
 
-    # mpc(xt, key)
-    
-    X = jnp.zeros((steps + 1, dyn.state_dim))
-    X = X.at[0].set(xt)
-
-    hist = jnp.zeros(steps)
-
-    for t in range(steps):
-        key, subkey = jax.random.split(key)
-        ut, J = mpc(xt, subkey)
-        xt = step(xt, ut)
-        print(t, xt, ut, J)
-
-        X = X.at[t+1].set(xt)
-        hist = hist.at[t].set(J)
-
-    # name = f'single_pendulum-iterations={iterations}-dt={dt}-h={horizon}'
-    name = f'double_pendulum-shots-{shots}-eps={eps}-iterations={iterations}-dt={dt}-h={horizon}'
-    
-    jnp.save(name + '.npy', hist)
-
-    T = jnp.arange(0, steps)
-
-    fig, ax = plt.subplots(1, 1)
-    ax.set_xlabel('Time (s)')
-    ax.set_ylabel('nats / s')
-    ax.plot(T * dt, hist)
-    fig.tight_layout()
-    fig.savefig(name + '.png', dpi = 300)
-    plt.show()
-
-    # dyn.render(X, path = name + '.mp4', skip = 1)
-    dyn.render(X, path = name + '.mp4', distance = 5.0, skip = 2, lookat = jnp.array([0, 0, 2.2]))
-
-
+    mpc(xt, key)

@@ -6,6 +6,30 @@ import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step, make_unroll
 
+# @jax.jit
+# def compute_vol(fx: Array, fu: Array):
+    
+#     dx = fx.shape[-1]
+#     du = fu.shape[-1]
+
+#     Q = jnp.eye(dx)
+#     R = jnp.eye(du) * 1.0
+
+#     def scan_fn(carry: tuple[Array, Array], inputs: tuple[Array, Array]):
+        
+#         Y_t, V_t = carry
+#         fx_t, fu_t = inputs
+
+#         Y_t = Q + fx_t.T @ Y_t @ fx_t
+#         V_t = Q + fx_t.T @ V_t @ fx_t - fx_t.T @ V_t @ fu_t @ jnp.linalg.inv(R + fu_t.T @ V_t @ fu_t) @ fu_t.T @ V_t @ fx_t
+
+#         carry = (Y_t, V_t)
+
+#         return carry, carry
+    
+#     _, (Y, V) = jax.lax.scan(scan_fn, init = (Q, Q), xs = (fx, fu), reverse = True)
+#     return Y, V
+
 @jax.jit
 def compute_vol(fx: Array, fu: Array):
     
@@ -13,22 +37,29 @@ def compute_vol(fx: Array, fu: Array):
     du = fu.shape[-1]
 
     Q = jnp.eye(dx)
-    R = jnp.eye(du) * 500.0
+    R = jnp.eye(du) * 1.0
 
     def scan_fn(carry: tuple[Array, Array], inputs: tuple[Array, Array]):
         
-        Y_t, V_t = carry
+        Y_t, V_t, W_t = carry
         fx_t, fu_t = inputs
 
+        S_inv = jnp.linalg.inv(R + fu_t.T @ V_t @ fu_t)
+        ## feedback gain
+        K_t = - S_inv @ fu_t.T @ V_t @ fx_t
+        # open loop entropy
         Y_t = Q + fx_t.T @ Y_t @ fx_t
-        V_t = Q + fx_t.T @ V_t @ fx_t - fx_t.T @ V_t @ fu_t @ jnp.linalg.inv(R + fu_t.T @ V_t @ fu_t) @ fu_t.T @ V_t @ fx_t
+        ## riccati
+        V_t = Q + fx_t.T @ V_t @ fx_t - fx_t.T @ V_t @ fu_t @ S_inv @ fu_t.T @ V_t @ fx_t
+        ## propagate closed loop entropy
+        W_t = Q + (fx_t + fu_t @ K_t).T @ W_t @ (fx_t + fu_t @ K_t)
 
-        carry = (Y_t, V_t)
+        carry = (Y_t, V_t, W_t)
 
         return carry, carry
     
-    _, (Y, V) = jax.lax.scan(scan_fn, init = (Q, Q), xs = (fx, fu), reverse = True)
-    return Y, V
+    _, (Y, V, W) = jax.lax.scan(scan_fn, init = (Q, Q, Q), xs = (fx, fu), reverse = True)
+    return Y, V, W
 
 def make_compute_entropy(step: callable):
     
@@ -39,10 +70,10 @@ def make_compute_entropy(step: callable):
 
         X = unroll(x0, U)
         fx, fu = traj_linerize(X[:-1], U)
-        Y, V = compute_vol(fx, fu)
+        Y, _, W = compute_vol(fx, fu)
 
         ol_entropy = jnp.linalg.slogdet(Y).logabsdet
-        cl_entropy = jnp.linalg.slogdet(V).logabsdet
+        cl_entropy = jnp.linalg.slogdet(W).logabsdet
 
         return ol_entropy, cl_entropy
     
@@ -53,7 +84,7 @@ if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
     dt = 0.05
-    horizon = 100
+    horizon = 200
     eps = 0.1
 
     dyn = Dynamics('xml/pendulum.xml', dt = dt)
@@ -112,8 +143,8 @@ if __name__ == '__main__':
 
 
     ## Create a grid over theta and theta_dot
-    n_theta = 200
-    n_theta_dot = 200
+    n_theta = 100
+    n_theta_dot = 100
     theta_min, theta_max = -2 * jnp.pi, 2 * jnp.pi
     theta_dot_min, theta_dot_max = -2 * jnp.pi, 2 * jnp.pi
 
@@ -192,8 +223,8 @@ if __name__ == '__main__':
         fig.colorbar(im, ax=ax)
 
     fig.tight_layout()
-    fig.savefig('entropy.png', dpi = 300)
     plt.show()
+    fig.savefig('entropy.png', dpi = 300)
 
 
 

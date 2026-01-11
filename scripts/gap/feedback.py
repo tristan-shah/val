@@ -1,6 +1,6 @@
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-os.environ['MUJOCO_GL'] = 'egl'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
 from jax import Array
@@ -39,21 +39,26 @@ def compute_volume(fx: Array, fu: Array, alpha: float):
 
     def scan_fn(carry: tuple[Array, Array], inputs: tuple[Array, Array]):
         
-        Y_t, V_t = carry
+        Y_t, V_t, W_t = carry
         fx_t, fu_t = inputs
 
         S_inv = jnp.linalg.inv(R + fu_t.T @ V_t @ fu_t)
-        
+        ## feedback gain
         K_t = - S_inv @ fu_t.T @ V_t @ fx_t
+        ## open loop entropy
         Y_t = Q + fx_t.T @ Y_t @ fx_t
+        ## riccati equation
         V_t = Q + fx_t.T @ V_t @ fx_t - fx_t.T @ V_t @ fu_t @ S_inv @ fu_t.T @ V_t @ fx_t
+        ## closed loop entropy
+        W_t = Q + (fx_t + fu_t @ K_t).T @ W_t @ (fx_t + fu_t @ K_t)
 
-        carry = (Y_t, V_t)
+        carry = (Y_t, V_t, W_t)
 
-        return carry, (Y_t, V_t, K_t)
+        return carry, (Y_t, V_t, W_t, K_t)
     
-    _, (Y, V, K) = jax.lax.scan(scan_fn, init = (Q, Q), xs = (fx, fu), reverse = True)
-    return Y, V, K
+    _, (Y, V, W, K) = jax.lax.scan(scan_fn, init = (Q, Q, Q), xs = (fx, fu), reverse = True)
+    return Y, V, W, K
+
 
 def make_unroll_feedback(step: callable, low: Array, high: Array):
 
@@ -146,13 +151,13 @@ class FeedbackMPC:
             fx_batch, fu_batch = self.batch_traj_linearize(X_batch[:, :-1, :], U_batch)
 
             ## compute entropy of each trajectory
-            Y, V, K_batch = self.batch_compute_volume(fx_batch, fu_batch, self.alpha)
+            Y, V, W, K_batch = self.batch_compute_volume(fx_batch, fu_batch, self.alpha)
             # K_batch = K_batch * 0.0 ## turn off feedback
-            # K_batch = K_batch * 0.1
 
             ## compute entropy
             ol_entropy = jnp.linalg.slogdet(Y).logabsdet
             cl_entropy = jnp.linalg.slogdet(V).logabsdet
+            # cl_entropy = jnp.linalg.slogdet(W).logabsdet
 
             ## convert entropy into information
             information = ol_entropy - cl_entropy
@@ -161,7 +166,8 @@ class FeedbackMPC:
 
             if self.objective == 'rate':
                 J = rate[:, 0]
-            elif self.objective == 'total_information':
+                # J = -cl_entropy[:, 0]
+            elif self.objective == 'info':
                 J = jnp.sum(information, axis = 1)
             else:
                 raise NameError
@@ -173,13 +179,22 @@ class FeedbackMPC:
             U = U_batch[idx]
             K = K_batch[idx]
 
-            # print(J[idx])
+            print(J[idx])
             # fig, ax = plt.subplots(2, 1)
             # ax[0].set_ylim(self.low.item(), self.high.item())
             # for i in range(shots):
             #     ax[0].plot(U_batch[i])
             #     ax[1].plot(information[i])
             # plt.show()
+
+        fig, ax = plt.subplots(2, 1)
+        ax[0].set_ylim(self.low.item(), self.high.item())
+        for i in range(shots):
+            ax[0].plot(U_batch[i])
+            ax[1].plot(information[i])
+        plt.show()
+
+        dyn.render(X, path = 'test.mp4', skip = 1)
 
         ## select first action
         ut = U[0]
@@ -196,11 +211,11 @@ class FeedbackMPC:
         self.U = U
         self.K = K
 
-        return ut, J[idx] #jnp.mean(first_rate)
+        return ut, J[idx]
 
 if __name__ == '__main__':
 
-    pendulum = 'double'
+    pendulum = 'single'
     
     seed = 0
     key = jax.random.PRNGKey(seed)
@@ -209,8 +224,8 @@ if __name__ == '__main__':
     if pendulum == 'single':
         dt = 0.05
         # works
-        horizon = 50
-        knots = 10
+        # horizon = 50
+        # knots = 20
 
         # works
         # horizon = 100 ## single
@@ -223,6 +238,10 @@ if __name__ == '__main__':
         # # not working
         # horizon = 300
         # knots = 30
+
+        horizon = 500
+        knots = 50
+
         steps = 500 ## single
 
         dyn = Dynamics('xml/pendulum.xml', dt = dt)
@@ -238,8 +257,8 @@ if __name__ == '__main__':
 
 
     eps = 0.1
-    iterations = 5
-    alpha = 100.0
+    iterations = 100
+    alpha = 1000.0
     objective = 'rate'
 
     step = make_step(dyn)
@@ -247,36 +266,37 @@ if __name__ == '__main__':
     mpc = FeedbackMPC(dyn, horizon, shots, knots, eps, iterations, alpha, objective)
 
     xt = jnp.zeros(dyn.state_dim)
+    xt = xt.at[0].set(0.0)
 
-    # mpc(xt, key)
+    mpc(xt, key)
 
-    X = jnp.zeros((steps + 1, dyn.state_dim))
-    X = X.at[0].set(xt)
+    # X = jnp.zeros((steps + 1, dyn.state_dim))
+    # X = X.at[0].set(xt)
 
-    hist = jnp.zeros(steps)
+    # hist = jnp.zeros(steps)
 
-    for t in range(steps):
-        key, subkey = jax.random.split(key)
-        ut, J = mpc(xt, subkey)
-        xt = step(xt, ut)
-        print(t, xt, ut, J)
+    # for t in range(steps):
+    #     key, subkey = jax.random.split(key)
+    #     ut, J = mpc(xt, subkey)
+    #     xt = step(xt, ut)
+    #     print(t, xt, ut, J)
 
-        X = X.at[t+1].set(xt)
-        hist = hist.at[t].set(J)
+    #     X = X.at[t+1].set(xt)
+    #     hist = hist.at[t].set(J)
 
-    name = f'{objective}-{pendulum}_pendulum-h={horizon}-shots={shots}-knots={knots}-eps={eps}-iterations={iterations}-alpha={alpha}-dt={dt}'
+    # name = f'{objective}-{pendulum}_pendulum-h={horizon}-shots={shots}-knots={knots}-eps={eps}-iterations={iterations}-alpha={alpha}-dt={dt}'
     
-    T = jnp.arange(0, steps)
+    # T = jnp.arange(0, steps)
 
-    fig, ax = plt.subplots(1, 1)
-    ax.set_xlabel('Time (s)')
-    ax.set_ylabel('nats / s')
-    ax.plot(T * dt, hist)
-    fig.tight_layout()
-    fig.savefig(name + '.png', dpi = 300)
-    plt.show()
+    # fig, ax = plt.subplots(1, 1)
+    # ax.set_xlabel('Time (s)')
+    # ax.set_ylabel('nats / s')
+    # ax.plot(T * dt, hist)
+    # fig.tight_layout()
+    # fig.savefig(name + '.png', dpi = 300)
+    # plt.show()
 
-    if pendulum == 'single':
-        dyn.render(X, path = name + '.mp4', skip = 1)
-    elif pendulum == 'double':
-        dyn.render(X, path = name + '.mp4', distance = 5.0, skip = 2, lookat = jnp.array([0, 0, 2.2]))
+    # if pendulum == 'single':
+    #     dyn.render(X, path = name + '.mp4', skip = 1)
+    # elif pendulum == 'double':
+    #     dyn.render(X, path = name + '.mp4', distance = 5.0, skip = 2, lookat = jnp.array([0, 0, 2.2]))
