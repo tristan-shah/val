@@ -131,9 +131,9 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(seed)
     dt = 0.01 ## double
     # dt = 0.05 ## single
-    horizon = 1000
+    horizon = 600
     # horizon = 300 ## single
-    shots = 1024 #256
+    shots = 2048
     eps = 0.1
     iterations = 5
     # steps = 500 ## single
