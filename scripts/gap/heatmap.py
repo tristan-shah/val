@@ -84,7 +84,7 @@ if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
     dt = 0.05
-    horizon = 200
+    horizon = 25
     eps = 0.1
 
     dyn = Dynamics('xml/pendulum.xml', dt = dt)
@@ -95,7 +95,7 @@ if __name__ == '__main__':
     compute_entropy = make_compute_entropy(make_step(dyn))
     batch_compute_entropy = jax.jit(jax.vmap(compute_entropy, in_axes = (0, None)))
 
-    U = jnp.zeros((horizon, dyn.control_dim)) + jax.random.normal(key, (horizon, dyn.control_dim)) * 0.05
+    U = jnp.zeros((horizon, dyn.control_dim))# + jax.random.normal(key, (horizon, dyn.control_dim)) * 0.05
     U = U.clip(low, high)
     T = jnp.arange(1, horizon+1)
 
@@ -163,10 +163,6 @@ if __name__ == '__main__':
     ol = jnp.reshape(ol, (n_theta_dot, n_theta, horizon))
     cl = jnp.reshape(cl, (n_theta_dot, n_theta, horizon))
 
-
-
-
-
     '''
     Row plot
     '''
@@ -228,7 +224,7 @@ if __name__ == '__main__':
 
 
 
-
+    # print(cl.shape)
 
 
     # '''
@@ -237,7 +233,10 @@ if __name__ == '__main__':
     # fig, ax = plt.subplots(1, 1)
 
     # im = ax.imshow(
-    #     jnp.log(jnp.sum(ol - cl, axis = 2)),
+    #     # jnp.log(jnp.sum(ol - cl, axis = 2)),
+    #     # -cl[:, :, 0],
+    #     # -jnp.sum(cl, axis = 2),
+    #     - jnp.sum(cl[:, :, 0:10], axis = 2),
     #     extent = [theta_min, theta_max, theta_dot_min, theta_dot_max],
     #     origin='lower',
     #     cmap='viridis',

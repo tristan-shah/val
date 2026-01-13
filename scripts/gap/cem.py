@@ -1,6 +1,6 @@
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-os.environ['MUJOCO_GL'] = 'egl'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
 from jax import Array
@@ -64,7 +64,7 @@ def compute_volume(fx: Array, fu: Array, alpha: float):
     _, (Y, V, W, K) = jax.lax.scan(scan_fn, init = (Q, Q, Q), xs = (fx, fu), reverse = True)
     return Y, V, W, K
 
-OBJECTIVES = ['rate', 'mean_rate', 'mean_info', 'mean_neg_cl_ent']
+OBJECTIVES = ['rate', 'mean_rate', 'mean_info', 'mean_neg_cl_ent', 'neg_cl_ent']
 
 def make_compute_rate(dyn: Dynamics, objective: str, alpha: float):
 
@@ -89,9 +89,9 @@ def make_compute_rate(dyn: Dynamics, objective: str, alpha: float):
         # ## compute entropy of each trajectory (manually setting alpha = 1.0)
         Y, V, W, _ = batch_compute_volume(fx_batch, fu_batch, alpha)
         ## compute entropy
-        ol_entropy = jnp.linalg.slogdet(Y).logabsdet
-        # cl_entropy = jnp.linalg.slogdet(V).logabsdet
-        cl_entropy = jnp.linalg.slogdet(W).logabsdet
+        ol_entropy = jnp.linalg.slogdet(Y).logabsdet ## open loop
+        # cl_entropy = jnp.linalg.slogdet(V).logabsdet ## closed loop (riccati equation)
+        cl_entropy = jnp.linalg.slogdet(W).logabsdet ## closed loop
         ## convert entropy into information
         information = ol_entropy - cl_entropy
 
@@ -107,6 +107,8 @@ def make_compute_rate(dyn: Dynamics, objective: str, alpha: float):
             return jnp.mean(information, axis = 1)
         elif objective == 'mean_neg_cl_ent':
             return jnp.mean(-cl_entropy, axis = 1)
+        elif objective == 'neg_cl_ent':
+            return -cl_entropy[:, 0]
 
     return jax.jit(compute_rate)
 
@@ -119,6 +121,7 @@ class CEM:
             horizon: int, 
             iterations: int, 
             elite_frac: float,
+            keep_frac: float,
             smoothing: float):
         
         assert 0.0 < elite_frac <= 1.0
@@ -136,6 +139,7 @@ class CEM:
         self.control_dim = dyn.control_dim
         self.iterations = iterations
         self.n_elite = max(1, int(elite_frac * shots))
+        self.n_keep = max(1, int(keep_frac * self.n_elite))
         self.smoothing = smoothing
 
         ## set a minimum exploration amount
@@ -145,25 +149,39 @@ class CEM:
         self.mean = jnp.zeros((self.horizon, self.control_dim))
         self.std = jnp.ones((self.horizon, self.control_dim))
 
+        self.elites = None
+
     def __call__(self, xt: Array, key):
 
         hist = []
         for i in range(self.iterations):
 
-            ## generate a batch of random control signals
             key, subkey = jax.random.split(key)
-            # noise = jax.random.normal(subkey, (self.shots, self.horizon, self.control_dim))
+            ## generate correlated noise
             noise = ar1_noise(subkey, self.shots, self.horizon, self.control_dim)
-
+            ## generate a batch of random control signals
             U_batch = self.mean[None, :, :] + self.std[None, :, :] * noise
             U_batch = U_batch.clip(self.low[None, None, :], self.high[None, None, :])
 
-            ## evaluate control signals in parallel
-            J = self.objective(xt, U_batch)
+            # ## if not first iteration
+            # if self.elites is not None:
+            #     keep = self.elites[:self.n_keep]
+            #     U_batch = jnp.concatenate([U_batch, keep], axis = 0)
 
-            ## select top control sequences
+            # # if last iteration
+            # if i == self.iterations-1:
+            #     ## if last iteration
+            #     U_batch = jnp.concatenate([U_batch, self.mean[None, :, :]], axis = 0)
+
+            ## evaluate control signals in parallel
+            # control_cost = jnp.mean(U_batch ** 2, axis = (1, 2))
+            J = self.objective(xt, U_batch)# - 0.001 * control_cost
+
+            ## select top performing control sequences
             elite_idx = jnp.argsort(J, descending = True)[:self.n_elite]
             U_elite = U_batch[elite_idx]
+            ## store elites from previous iteration
+            self.elites = U_elite
 
             ## fit gaussian
             new_mean = jnp.mean(U_elite, axis = 0)
@@ -203,15 +221,22 @@ class CEM:
         # fig.savefig('test.png', dpi = 300)
         # plt.show()
 
-        ## step forward mean and std
+        ## roll backward
         self.mean = jnp.roll(self.mean, shift = -1, axis = 0)
         self.std = jnp.roll(self.std, shift = -1, axis = 0)
+        self.elites = jnp.roll(self.elites, shift = -1, axis = 1)
 
+        ## set last element
         self.mean = self.mean.at[-1].set(self.mean[-2])
         self.std = self.std.at[-1].set(self.std[-2])
-        # self.mean = self.mean.at[-1].set(jnp.zeros_like(self.mean[-2]))
-        # self.std = self.std.at[-1].set(jnp.ones_like(self.std[-2]))
 
+        if self.elites is not None:
+            ## add a random last action to the shifted elites
+            key, subkey = jax.random.split(key)
+            random_last = jax.random.uniform(subkey, (self.elites.shape[0], self.control_dim), minval=self.low, maxval=self.high)
+            self.elites = self.elites.at[:, -1, :].set(random_last)
+
+        ## return best action
         best_idx = jnp.argmax(J)
         U_best = U_batch[best_idx]
         ut = U_best[0]
@@ -222,16 +247,17 @@ if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
     
-    shots = 1024
-    horizon = 1000
+    shots = 512
+    horizon = 300
     iterations = 1
     elite_frac = 0.1
-    smoothing = 0.3
-    objective_type = 'mean_neg_cl_ent'
+    keep_frac = 0.3
+    smoothing = 0.1
+    objective_type = 'rate'
     alpha = 1.0
 
-    # pendulum = 'single'
-    pendulum = 'double'
+    pendulum = 'single'
+    # pendulum = 'double'
 
     if pendulum == 'single':
         dt = 0.05
@@ -251,6 +277,7 @@ if __name__ == '__main__':
         horizon, 
         iterations, 
         elite_frac,
+        keep_frac,
         smoothing)
 
     theta = 0.0
@@ -274,7 +301,7 @@ if __name__ == '__main__':
         X = X.at[t+1].set(xt)
         hist = hist.at[t].set(J)
 
-    name = f'CEM-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-frac={elite_frac}-smooth={smoothing}-alpha={alpha}'
+    name = f'CEM-{pendulum}-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}'
     
     fig, ax = plt.subplots(1, 1)
     ax.set_xlabel('Time (s)')
@@ -292,4 +319,3 @@ if __name__ == '__main__':
         dyn.render(X, path = name + '.mp4', skip = 1)
     elif pendulum == 'double':
         dyn.render(X, path = name + '.mp4', distance = 5.0, skip = 2, lookat = jnp.array([0, 0, 2.2]))
-
