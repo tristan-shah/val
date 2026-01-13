@@ -223,7 +223,7 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(seed)
     
     shots = 1024
-    horizon = 600
+    horizon = 1000
     iterations = 1
     elite_frac = 0.1
     smoothing = 0.3
