@@ -66,7 +66,7 @@ def compute_volume(fx: Array, fu: Array, alpha: float):
 
 OBJECTIVES = ['rate', 'mean_rate', 'mean_info', 'mean_neg_cl_ent']
 
-def make_compute_rate(dyn: Dynamics, objective: str):
+def make_compute_rate(dyn: Dynamics, objective: str, alpha: float):
 
     assert objective in OBJECTIVES
 
@@ -87,7 +87,7 @@ def make_compute_rate(dyn: Dynamics, objective: str):
         ## linearize the batch of trajectories
         fx_batch, fu_batch = batch_traj_linearize(X_batch[:, :-1, :], U_batch)
         # ## compute entropy of each trajectory (manually setting alpha = 1.0)
-        Y, V, W, _ = batch_compute_volume(fx_batch, fu_batch, 0.01)
+        Y, V, W, _ = batch_compute_volume(fx_batch, fu_batch, alpha)
         ## compute entropy
         ol_entropy = jnp.linalg.slogdet(Y).logabsdet
         # cl_entropy = jnp.linalg.slogdet(V).logabsdet
@@ -140,7 +140,6 @@ class CEM:
 
         ## set a minimum exploration amount
         self.min_std = 0.05 * (self.high - self.low) ## default
-        # self.min_std = 0.1 * (self.high - self.low)
 
         ## initial mean and std
         self.mean = jnp.zeros((self.horizon, self.control_dim))
@@ -229,6 +228,7 @@ if __name__ == '__main__':
     elite_frac = 0.1
     smoothing = 0.3
     objective_type = 'mean_neg_cl_ent'
+    alpha = 1.0
 
     # pendulum = 'single'
     pendulum = 'double'
@@ -246,7 +246,7 @@ if __name__ == '__main__':
 
     mpc = CEM(
         dyn, 
-        make_compute_rate(dyn, objective_type),
+        make_compute_rate(dyn, objective_type, alpha),
         shots, 
         horizon, 
         iterations, 
@@ -274,7 +274,7 @@ if __name__ == '__main__':
         X = X.at[t+1].set(xt)
         hist = hist.at[t].set(J)
 
-    name = f'CEM-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-frac={elite_frac}-smooth={smoothing}'
+    name = f'CEM-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-frac={elite_frac}-smooth={smoothing}-alpha={alpha}'
     
     fig, ax = plt.subplots(1, 1)
     ax.set_xlabel('Time (s)')
