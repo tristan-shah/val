@@ -1,6 +1,6 @@
-# import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-# os.environ['MUJOCO_GL'] = 'egl'
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
 from jax import Array
@@ -248,7 +248,7 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(seed)
     
     shots = 512
-    horizon = 300
+    horizon = 1000 #300
     iterations = 1
     elite_frac = 0.1
     keep_frac = 0.3
@@ -256,8 +256,8 @@ if __name__ == '__main__':
     objective_type = 'rate'
     alpha = 1.0
 
-    pendulum = 'single'
-    # pendulum = 'double'
+    # pendulum = 'single'
+    pendulum = 'double'
 
     if pendulum == 'single':
         dt = 0.05
