@@ -151,6 +151,24 @@ class CEM:
 
         self.elites = None
 
+    def roll(self, key):
+
+        ## roll backward
+        self.mean = jnp.roll(self.mean, shift = -1, axis = 0)
+        self.std = jnp.roll(self.std, shift = -1, axis = 0)
+        self.elites = jnp.roll(self.elites, shift = -1, axis = 1)
+
+        ## set last element
+        self.mean = self.mean.at[-1].set(self.mean[-2])
+        self.std = self.std.at[-1].set(self.std[-2])
+
+        if self.elites is not None:
+            ## add a random last action to the shifted elites
+            key, subkey = jax.random.split(key)
+            random_last = jax.random.uniform(subkey, (self.elites.shape[0], self.control_dim), minval = self.low, maxval = self.high)
+            self.elites = self.elites.at[:, -1, :].set(random_last)
+        return None
+
     def __call__(self, xt: Array, key):
 
         hist = []
@@ -221,25 +239,14 @@ class CEM:
         # fig.savefig('test.png', dpi = 300)
         # plt.show()
 
-        ## roll backward
-        self.mean = jnp.roll(self.mean, shift = -1, axis = 0)
-        self.std = jnp.roll(self.std, shift = -1, axis = 0)
-        self.elites = jnp.roll(self.elites, shift = -1, axis = 1)
-
-        ## set last element
-        self.mean = self.mean.at[-1].set(self.mean[-2])
-        self.std = self.std.at[-1].set(self.std[-2])
-
-        if self.elites is not None:
-            ## add a random last action to the shifted elites
-            key, subkey = jax.random.split(key)
-            random_last = jax.random.uniform(subkey, (self.elites.shape[0], self.control_dim), minval=self.low, maxval=self.high)
-            self.elites = self.elites.at[:, -1, :].set(random_last)
-
         ## return best action
         best_idx = jnp.argmax(J)
         U_best = U_batch[best_idx]
         ut = U_best[0]
+        # ut = self.mean[0]
+
+        ## rolls over time dependent sequences one step
+        self.roll(key)
 
         return ut, J[elite_idx].mean()
 
@@ -247,8 +254,8 @@ if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
     
-    shots = 512
-    horizon = 1000 #300
+    shots = 1024
+    horizon = 1000
     iterations = 1
     elite_frac = 0.1
     keep_frac = 0.3
@@ -256,8 +263,8 @@ if __name__ == '__main__':
     objective_type = 'rate'
     alpha = 1.0
 
-    # pendulum = 'single'
-    pendulum = 'double'
+    pendulum = 'single'
+    # pendulum = 'double'
 
     if pendulum == 'single':
         dt = 0.05
