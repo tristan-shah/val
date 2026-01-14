@@ -254,8 +254,8 @@ if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
     
-    shots = 1024
-    horizon = 1000
+    shots = 2048
+    horizon = 1024
     iterations = 1
     elite_frac = 0.1
     keep_frac = 0.3
@@ -263,8 +263,8 @@ if __name__ == '__main__':
     objective_type = 'rate'
     alpha = 1.0
 
-    pendulum = 'single'
-    # pendulum = 'double'
+    # pendulum = 'single'
+    pendulum = 'double'
 
     if pendulum == 'single':
         dt = 0.05
@@ -308,7 +308,7 @@ if __name__ == '__main__':
         X = X.at[t+1].set(xt)
         hist = hist.at[t].set(J)
 
-    name = f'CEM-{pendulum}-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-gear=4.0'
+    name = f'CEM-{pendulum}-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-gear=4.0-dt={dt}'
     
     fig, ax = plt.subplots(1, 1)
     ax.set_xlabel('Time (s)')
