@@ -37,6 +37,8 @@ def compute_vol(fx: Array, fu: Array):
     du = fu.shape[-1]
 
     Q = jnp.eye(dx)
+    # Q = Q.at[0, 0].set(2.0)
+    Q = Q.at[1, 1].set(0.001)
     R = jnp.eye(du) * 1.0
 
     def scan_fn(carry: tuple[Array, Array], inputs: tuple[Array, Array]):
@@ -84,7 +86,7 @@ if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
     dt = 0.05
-    horizon = 25
+    horizon = 100
     eps = 0.1
 
     dyn = Dynamics('xml/pendulum.xml', dt = dt)
@@ -188,7 +190,6 @@ if __name__ == '__main__':
             ax.set_ylabel(r'$\dot{\theta}$ (rad/s)')
         fig.colorbar(im, ax=ax)
 
-        # Second row: LE 1
         ax = axes[1, i]
         im = ax.imshow(
             cl[:, :, t],
@@ -203,7 +204,6 @@ if __name__ == '__main__':
         ax.set_xlabel(r'$\theta$ (rad)')
         fig.colorbar(im, ax=ax)
 
-        # Second row: LE 1
         ax = axes[2, i]
         im = ax.imshow(
             ol[:, :, t] - cl[:, :, t],

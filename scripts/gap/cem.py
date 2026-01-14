@@ -1,6 +1,6 @@
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-os.environ['MUJOCO_GL'] = 'egl'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
 from jax import Array
@@ -40,6 +40,14 @@ def compute_volume(fx: Array, fu: Array, alpha: float):
     du = fu.shape[-1]
 
     Q = jnp.eye(dx)
+    ## single pendulum
+    # Q = Q.at[0, 0].set(0.0) ## dont care about position
+    # Q = Q.at[1, 1].set(0.001) ## dont care about velocity
+    # Q = Q.at[1, 1].set(0.0) ## dont care about velocity
+
+    ## double pendulum
+    Q = Q.at[2, 2].set(0.0)
+    Q = Q.at[3, 3].set(0.0)
     R = jnp.eye(du) * alpha
 
     def scan_fn(carry: tuple[Array, Array], inputs: tuple[Array, Array]):
@@ -256,6 +264,8 @@ if __name__ == '__main__':
     
     shots = 2048
     horizon = 1024
+    # shots = 512
+    # horizon = 300
     iterations = 1
     elite_frac = 0.1
     keep_frac = 0.3
@@ -308,7 +318,7 @@ if __name__ == '__main__':
         X = X.at[t+1].set(xt)
         hist = hist.at[t].set(J)
 
-    name = f'CEM-{pendulum}-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-gear=4.0-dt={dt}'
+    name = f'zerovel-CEM-{pendulum}-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-gear=4.0-dt={dt}'
     
     fig, ax = plt.subplots(1, 1)
     ax.set_xlabel('Time (s)')
