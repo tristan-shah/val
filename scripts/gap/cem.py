@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
@@ -45,9 +45,9 @@ def compute_volume(fx: Array, fu: Array, alpha: float):
     # Q = Q.at[1, 1].set(0.001) ## dont care about velocity
     # Q = Q.at[1, 1].set(0.0) ## dont care about velocity
 
-    ## double pendulum
-    Q = Q.at[2, 2].set(0.001)
-    Q = Q.at[3, 3].set(0.001)
+    # ## double pendulum
+    # Q = Q.at[2, 2].set(0.001)
+    # Q = Q.at[3, 3].set(0.001)
     R = jnp.eye(du) * alpha
 
     def scan_fn(carry: tuple[Array, Array], inputs: tuple[Array, Array]):
