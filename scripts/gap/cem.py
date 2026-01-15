@@ -257,7 +257,7 @@ if __name__ == '__main__':
     # horizon = 1024
     shots = 512
     horizon = 100
-    iterations = 10
+    iterations = 20
     elite_frac = 0.1
     keep_frac = 0.3
     smoothing = 0.1
