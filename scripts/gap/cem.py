@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from val import Dynamics, make_step, make_unroll
 
 def ar1_noise(key, shots: int, horizon: int, control_dim: int, rho: float = 0.9):
+# def ar1_noise(key, shots: int, horizon: int, control_dim: int, rho: float = 0.97):
     '''
     Returns noise of shape (shots, horizon, control_dim)
     with AR(1) time correlation.
@@ -144,6 +145,7 @@ class CEM:
 
         ## set a minimum exploration amount
         self.min_std = 0.05 * (self.high - self.low) ## default
+        # self.min_std = 0.01 * (self.high - self.low) ## default
 
         ## initial mean and std
         self.mean = jnp.zeros((self.horizon, self.control_dim))
@@ -255,16 +257,17 @@ if __name__ == '__main__':
     
     ## sp
     # shots = 512
-    # horizon = 200
+    # horizon = 50 #200
 
     ## dp
     # shots = 2048
     # horizon = 1024
+
     ## dp upright test
     shots = 2048
     horizon = 100
     
-    iterations = 20
+    iterations = 10
     elite_frac = 0.1
     keep_frac = 0.3
     smoothing = 0.1
@@ -302,8 +305,7 @@ if __name__ == '__main__':
     x0 = x0.at[0].set(theta)
     xt = x0.copy()
 
-    # U, J = mpc(xt, key)
-    # steps = horizon
+    # mpc(xt, key)
 
     X = jnp.zeros((steps + 1, dyn.state_dim))
     X = X.at[0].set(xt)
@@ -313,14 +315,13 @@ if __name__ == '__main__':
     for t in range(steps):
         key, subkey = jax.random.split(key)
         ut, J = mpc(xt, subkey)
-        # ut = U[t]
         xt = step(xt, ut)
         print(t, xt, ut, J)
 
         X = X.at[t+1].set(xt)
         hist = hist.at[t].set(J)
 
-    name = f'CEM-{pendulum}-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-gear=4.0-dt={dt}'
+    name = f'rho-CEM-{pendulum}-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-gear=4.0-dt={dt}'
     
     fig, ax = plt.subplots(1, 1)
     ax.set_xlabel('Time (s)')
@@ -335,7 +336,8 @@ if __name__ == '__main__':
     plt.show()
 
     if pendulum == 'single':
-        dyn.render(X, path = name + '.mp4', skip = 1)
+
+        T = jnp.arange(0, steps + 1)
 
         fig, ax = plt.subplots(1, 1)
         ax.set_xlabel('Time (s)')
@@ -344,13 +346,17 @@ if __name__ == '__main__':
         fig.savefig(name + '-velocity.png', dpi = 300)
         plt.show()
 
+        dyn.render(X, path = name + '.mp4', skip = 1)
+
     elif pendulum == 'double':
+
+        T = jnp.arange(0, steps + 1)
 
         fig, ax = plt.subplots(1, 1)
         ax.set_xlabel('Time (s)')
         ax.set_ylabel('Velocity (rad/s)')
-        ax.plot(X[:, 2], label = 'Link 1')
-        ax.plot(X[:, 3], label = 'Link 2')
+        ax.plot(T * dt, X[:, 2], label = 'Link 1')
+        ax.plot(T * dt, X[:, 3], label = 'Link 2')
         fig.savefig(name + '-velocity.png', dpi = 300)
         plt.show()
 
