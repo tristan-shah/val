@@ -19,13 +19,16 @@
 
         <!-- First link -->
         <body name="first_link" pos="0 0 2.2">
-            <joint name="hinge1" type="hinge" axis="0 1 0" pos="0 0 0" damping="0.1"/>
+            <!-- <joint name="hinge1" type="hinge" axis="0 1 0" pos="0 0 0" damping="0.1"/> -->
+            <joint name="hinge1" type="hinge" axis="0 1 0" pos="0 0 0" damping="0.5"/>
+
             <geom name="rod1" type="capsule" fromto="0 0 0 0 0 -1" size="0.02" mass="1"/>
             <geom name="bob1" type="sphere" pos="0 0 -1" size="0.05" rgba="1 0 0 1" mass="0"/>
 
             <!-- Second link attached to the first -->
             <body name="second_link" pos="0 0 -1">
-                <joint name="hinge2" type="hinge" axis="0 1 0" pos="0 0 0" damping="0.1"/>
+                <!-- <joint name="hinge2" type="hinge" axis="0 1 0" pos="0 0 0" damping="0.1"/> -->
+                <joint name="hinge2" type="hinge" axis="0 1 0" pos="0 0 0" damping="0.5"/>
                 <geom name="rod2" type="capsule" fromto="0 0 0 0 0 -1" size="0.02" mass="1"/>
                 <geom name="bob2" type="sphere" pos="0 0 -1" size="0.05" rgba="0 0 1 1" mass="0"/>
             </body>
