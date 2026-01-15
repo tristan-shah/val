@@ -321,7 +321,7 @@ if __name__ == '__main__':
         X = X.at[t+1].set(xt)
         hist = hist.at[t].set(J)
 
-    name = f'rho-CEM-{pendulum}-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-gear=4.0-dt={dt}'
+    name = f'top-CEM-{pendulum}-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-gear=4.0-dt={dt}'
     
     fig, ax = plt.subplots(1, 1)
     ax.set_xlabel('Time (s)')
