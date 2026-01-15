@@ -1,6 +1,6 @@
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-os.environ['MUJOCO_GL'] = 'egl'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
 from jax import Array
@@ -40,14 +40,6 @@ def compute_volume(fx: Array, fu: Array, alpha: float):
     du = fu.shape[-1]
 
     Q = jnp.eye(dx)
-    ## single pendulum
-    # Q = Q.at[0, 0].set(0.0) ## dont care about position
-    # Q = Q.at[1, 1].set(0.001) ## dont care about velocity
-    # Q = Q.at[1, 1].set(0.0) ## dont care about velocity
-
-    # ## double pendulum
-    # Q = Q.at[2, 2].set(0.001)
-    # Q = Q.at[3, 3].set(0.001)
     R = jnp.eye(du) * alpha
 
     def scan_fn(carry: tuple[Array, Array], inputs: tuple[Array, Array]):
@@ -200,8 +192,7 @@ class CEM:
             #     U_batch = jnp.concatenate([U_batch, self.mean[None, :, :]], axis = 0)
 
             ## evaluate control signals in parallel
-            # control_cost = jnp.mean(U_batch ** 2, axis = (1, 2))
-            J = self.objective(xt, U_batch)# - 0.001 * control_cost
+            J = self.objective(xt, U_batch)
 
             ## select top performing control sequences
             elite_idx = jnp.argsort(J, descending = True)[:self.n_elite]
@@ -251,22 +242,22 @@ class CEM:
         best_idx = jnp.argmax(J)
         U_best = U_batch[best_idx]
         ut = U_best[0]
-        # ut = self.mean[0]
 
         ## rolls over time dependent sequences one step
         self.roll(key)
 
         return ut, J[elite_idx].mean()
+        # return U_best, J[best_idx]
 
 if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
     
-    shots = 2048
-    horizon = 1024
-    # shots = 512
-    # horizon = 300
-    iterations = 1
+    # shots = 2048
+    # horizon = 1024
+    shots = 512
+    horizon = 100
+    iterations = 10
     elite_frac = 0.1
     keep_frac = 0.3
     smoothing = 0.1
@@ -283,7 +274,8 @@ if __name__ == '__main__':
     elif pendulum == 'double':
         dt = 0.01
         dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
-        steps = 3000
+        steps = 500
+        # steps = 3000
 
     step = make_step(dyn)
 
@@ -298,11 +290,13 @@ if __name__ == '__main__':
         smoothing)
 
     theta = 0.0
+    theta = 3.14
     x0 = jnp.zeros(dyn.state_dim)
     x0 = x0.at[0].set(theta)
     xt = x0.copy()
 
-    # mpc(xt, key)
+    # U, J = mpc(xt, key)
+    # steps = horizon
 
     X = jnp.zeros((steps + 1, dyn.state_dim))
     X = X.at[0].set(xt)
@@ -312,13 +306,14 @@ if __name__ == '__main__':
     for t in range(steps):
         key, subkey = jax.random.split(key)
         ut, J = mpc(xt, subkey)
+        # ut = U[t]
         xt = step(xt, ut)
         print(t, xt, ut, J)
 
         X = X.at[t+1].set(xt)
         hist = hist.at[t].set(J)
 
-    name = f'zerovel-CEM-{pendulum}-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-gear=4.0-dt={dt}'
+    name = f'CEM-{pendulum}-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-gear=4.0-dt={dt}'
     
     fig, ax = plt.subplots(1, 1)
     ax.set_xlabel('Time (s)')
@@ -334,5 +329,22 @@ if __name__ == '__main__':
 
     if pendulum == 'single':
         dyn.render(X, path = name + '.mp4', skip = 1)
+
+        fig, ax = plt.subplots(1, 1)
+        ax.set_xlabel('Time (s)')
+        ax.set_ylabel('Velocity (rad/s)')
+        ax.plot(T * dt, X[:, 1])
+        fig.savefig(name + '-velocity.png', dpi = 300)
+        plt.show()
+
     elif pendulum == 'double':
+
+        fig, ax = plt.subplots(1, 1)
+        ax.set_xlabel('Time (s)')
+        ax.set_ylabel('Velocity (rad/s)')
+        ax.plot(X[:, 2], label = 'Link 1')
+        ax.plot(X[:, 3], label = 'Link 2')
+        fig.savefig(name + '-velocity.png', dpi = 300)
+        plt.show()
+
         dyn.render(X, path = name + '.mp4', distance = 5.0, skip = 2, lookat = jnp.array([0, 0, 2.2]))

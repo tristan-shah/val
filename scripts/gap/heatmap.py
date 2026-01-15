@@ -38,7 +38,7 @@ def compute_vol(fx: Array, fu: Array):
 
     Q = jnp.eye(dx)
     # Q = Q.at[0, 0].set(2.0)
-    Q = Q.at[1, 1].set(0.001)
+    # Q = Q.at[1, 1].set(0.001)
     R = jnp.eye(du) * 1.0
 
     def scan_fn(carry: tuple[Array, Array], inputs: tuple[Array, Array]):
