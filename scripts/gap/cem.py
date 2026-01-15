@@ -1,6 +1,6 @@
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-os.environ['MUJOCO_GL'] = 'egl'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
 from jax import Array
@@ -35,12 +35,12 @@ def ar1_noise(key, shots: int, horizon: int, control_dim: int, rho: float = 0.9)
     return jnp.transpose(noise, (1, 0, 2))
 
 @jax.jit
-def compute_volume(fx: Array, fu: Array, alpha: float):
+def compute_volume(fx: Array, fu: Array, alpha: float, gamma: float):
     
     dx = fx.shape[-1]
     du = fu.shape[-1]
 
-    Q = jnp.eye(dx)
+    Q = jnp.eye(dx) * 1.0
     R = jnp.eye(du) * alpha
 
     def scan_fn(carry: tuple[Array, Array], inputs: tuple[Array, Array]):
@@ -48,15 +48,15 @@ def compute_volume(fx: Array, fu: Array, alpha: float):
         Y_t, V_t, W_t = carry
         fx_t, fu_t = inputs
 
-        S_inv = jnp.linalg.inv(R + fu_t.T @ V_t @ fu_t)
+        S_inv = jnp.linalg.inv(R + gamma * fu_t.T @ V_t @ fu_t)
         ## feedback gain
-        K_t = - S_inv @ fu_t.T @ V_t @ fx_t
+        K_t = - gamma * S_inv @ fu_t.T @ V_t @ fx_t
         ## open loop entropy
-        Y_t = Q + fx_t.T @ Y_t @ fx_t
+        Y_t = Q + gamma * fx_t.T @ Y_t @ fx_t
         ## riccati equation
-        V_t = Q + fx_t.T @ V_t @ fx_t - fx_t.T @ V_t @ fu_t @ S_inv @ fu_t.T @ V_t @ fx_t
+        V_t = Q + gamma * fx_t.T @ V_t @ fx_t - gamma ** 2 * fx_t.T @ V_t @ fu_t @ S_inv @ fu_t.T @ V_t @ fx_t
         ## closed loop entropy
-        W_t = Q + (fx_t + fu_t @ K_t).T @ W_t @ (fx_t + fu_t @ K_t)
+        W_t = Q + gamma * (fx_t + fu_t @ K_t).T @ W_t @ (fx_t + fu_t @ K_t)
 
         carry = (Y_t, V_t, W_t)
 
@@ -67,7 +67,7 @@ def compute_volume(fx: Array, fu: Array, alpha: float):
 
 OBJECTIVES = ['rate', 'mean_rate', 'mean_info', 'mean_neg_cl_ent', 'neg_cl_ent']
 
-def make_compute_rate(dyn: Dynamics, objective: str, alpha: float):
+def make_compute_rate(dyn: Dynamics, objective: str, alpha: float = 1.0, gamma: float = 1.0):
 
     assert objective in OBJECTIVES
 
@@ -77,7 +77,7 @@ def make_compute_rate(dyn: Dynamics, objective: str, alpha: float):
     batch_traj_linearize = jax.jit(jax.vmap(traj_linerize))
     unroll = make_unroll(step)
     batch_unroll = jax.jit(jax.vmap(unroll, in_axes = (None, 0)))
-    batch_compute_volume = jax.jit(jax.vmap(compute_volume, in_axes = (0, 0, None)))
+    batch_compute_volume = jax.jit(jax.vmap(compute_volume, in_axes = (0, 0, None, None)))
 
     dt = dyn.mjx_model.opt.timestep
 
@@ -88,7 +88,7 @@ def make_compute_rate(dyn: Dynamics, objective: str, alpha: float):
         ## linearize the batch of trajectories
         fx_batch, fu_batch = batch_traj_linearize(X_batch[:, :-1, :], U_batch)
         # ## compute entropy of each trajectory (manually setting alpha = 1.0)
-        Y, V, W, _ = batch_compute_volume(fx_batch, fu_batch, alpha)
+        Y, V, W, _ = batch_compute_volume(fx_batch, fu_batch, alpha, gamma)
         ## compute entropy
         ol_entropy = jnp.linalg.slogdet(Y).logabsdet ## open loop
         # cl_entropy = jnp.linalg.slogdet(V).logabsdet ## closed loop (riccati equation)
@@ -123,7 +123,8 @@ class CEM:
             iterations: int, 
             elite_frac: float,
             keep_frac: float,
-            smoothing: float):
+            smoothing: float,
+            rho: float = 0.9):
         
         assert 0.0 < elite_frac <= 1.0
 
@@ -142,6 +143,7 @@ class CEM:
         self.n_elite = max(1, int(elite_frac * shots))
         self.n_keep = max(1, int(keep_frac * self.n_elite))
         self.smoothing = smoothing
+        self.rho = rho
 
         ## set a minimum exploration amount
         self.min_std = 0.05 * (self.high - self.low) ## default
@@ -178,7 +180,7 @@ class CEM:
 
             key, subkey = jax.random.split(key)
             ## generate correlated noise
-            noise = ar1_noise(subkey, self.shots, self.horizon, self.control_dim)
+            noise = ar1_noise(subkey, self.shots, self.horizon, self.control_dim, self.rho)
             ## generate a batch of random control signals
             U_batch = self.mean[None, :, :] + self.std[None, :, :] * noise
             U_batch = U_batch.clip(self.low[None, None, :], self.high[None, None, :])
@@ -257,25 +259,27 @@ if __name__ == '__main__':
     
     ## sp
     # shots = 512
-    # horizon = 50 #200
+    # horizon = 200 #200
 
     ## dp
     # shots = 2048
     # horizon = 1024
 
     ## dp upright test
-    shots = 2048
-    horizon = 100
+    shots = 512
+    horizon = 1024
     
-    iterations = 10
+    iterations = 1
     elite_frac = 0.1
     keep_frac = 0.3
     smoothing = 0.1
     objective_type = 'rate'
     alpha = 1.0
+    rho = 0.9
+    gamma = 1.0
 
-    # pendulum = 'single'
-    pendulum = 'double'
+    pendulum = 'single'
+    # pendulum = 'double'
 
     if pendulum == 'single':
         dt = 0.05
@@ -291,15 +295,16 @@ if __name__ == '__main__':
 
     mpc = CEM(
         dyn, 
-        make_compute_rate(dyn, objective_type, alpha),
+        make_compute_rate(dyn, objective_type, alpha, gamma),
         shots, 
         horizon, 
         iterations, 
         elite_frac,
         keep_frac,
-        smoothing)
+        smoothing,
+        rho)
 
-    theta = 0.0
+    # theta = 0.0
     theta = 3.14
     x0 = jnp.zeros(dyn.state_dim)
     x0 = x0.at[0].set(theta)
@@ -321,7 +326,8 @@ if __name__ == '__main__':
         X = X.at[t+1].set(xt)
         hist = hist.at[t].set(J)
 
-    name = f'top-CEM-{pendulum}-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-gear=4.0-dt={dt}'
+    # name = f'top-rho={rho}-gamma={gamma}-damp=0.5-mass=1.0-CEM-{pendulum}-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-gear=4.0-dt={dt}'
+    name = f'rho={rho}-gamma={gamma}-damp=0.5-mass=1.0-CEM-{pendulum}-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-gear=4.0-dt={dt}'
     
     fig, ax = plt.subplots(1, 1)
     ax.set_xlabel('Time (s)')
