@@ -1,6 +1,6 @@
-# import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-# os.environ['MUJOCO_GL'] = 'egl'
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
 from jax import Array
@@ -269,7 +269,7 @@ if __name__ == '__main__':
     shots = 512
     horizon = 1024
     
-    iterations = 1
+    iterations = 5
     elite_frac = 0.1
     keep_frac = 0.3
     smoothing = 0.1
