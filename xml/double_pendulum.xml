@@ -21,7 +21,6 @@
         <body name="first_link" pos="0 0 2.2">
             <!-- <joint name="hinge1" type="hinge" axis="0 1 0" pos="0 0 0" damping="0.1"/> -->
             <joint name="hinge1" type="hinge" axis="0 1 0" pos="0 0 0" damping="0.5"/>
-
             <geom name="rod1" type="capsule" fromto="0 0 0 0 0 -1" size="0.02" mass="1"/>
             <geom name="bob1" type="sphere" pos="0 0 -1" size="0.05" rgba="1 0 0 1" mass="0"/>
 
@@ -38,7 +37,7 @@
     <actuator>
         <!-- Optional: torque actuator to drive the pendulum -->
         <!-- <motor joint="hinge1" ctrlrange="-1 1" gear="1"/> -->
-        <motor joint="hinge1" ctrlrange="-1 1" gear="4"/>
-        <!-- <motor joint="hinge1" ctrlrange="-1 1" gear="8"/> -->
+        <!-- <motor joint="hinge1" ctrlrange="-1 1" gear="4"/> -->
+        <motor joint="hinge1" ctrlrange="-1 1" gear="8"/>
     </actuator>
 </mujoco>

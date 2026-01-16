@@ -278,8 +278,8 @@ if __name__ == '__main__':
     rho = 0.9
     gamma = 1.0
 
-    pendulum = 'single'
-    # pendulum = 'double'
+    # pendulum = 'single'
+    pendulum = 'double'
 
     if pendulum == 'single':
         dt = 0.05
@@ -288,8 +288,8 @@ if __name__ == '__main__':
     elif pendulum == 'double':
         dt = 0.01
         dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
-        steps = 500
-        # steps = 3000
+        # steps = 500
+        steps = 3000
 
     step = make_step(dyn)
 
@@ -304,8 +304,8 @@ if __name__ == '__main__':
         smoothing,
         rho)
 
-    # theta = 0.0
-    theta = 3.14
+    theta = 0.0
+    # theta = 3.14
     x0 = jnp.zeros(dyn.state_dim)
     x0 = x0.at[0].set(theta)
     xt = x0.copy()
@@ -327,7 +327,7 @@ if __name__ == '__main__':
         hist = hist.at[t].set(J)
 
     # name = f'top-rho={rho}-gamma={gamma}-damp=0.5-mass=1.0-CEM-{pendulum}-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-gear=4.0-dt={dt}'
-    name = f'rho={rho}-gamma={gamma}-damp=0.5-mass=1.0-CEM-{pendulum}-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-gear=4.0-dt={dt}'
+    name = f'rho={rho}-gamma={gamma}-damp=0.5-mass=1.0-CEM-{pendulum}-obj={objective_type}-shots={shots}-h={horizon}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-gear=8.0-dt={dt}'
     
     fig, ax = plt.subplots(1, 1)
     ax.set_xlabel('Time (s)')
