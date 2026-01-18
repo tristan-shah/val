@@ -19,7 +19,7 @@ if __name__ == '__main__':
     shots = 128
     steps = 3000
 
-    iterations = 1
+    iterations = 10
     elite_frac = 0.1
     keep_frac = 0.3
     smoothing = 0.1
