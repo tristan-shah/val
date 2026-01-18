@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
@@ -10,27 +10,19 @@ from val import Dynamics, make_step, make_unroll
 from val.cem import CEM
 from val.info import make_compute_rate
 
-def ant_initial_state():
-    return jnp.array([
-        4.63033074e-09, -1.33166722e-08,  5.88738445e-01,  1.00000000e+00,
-        4.03076686e-10,  1.40153441e-10,  2.18994597e-19,  1.34050243e-09,
-        1.08063526e+00, -6.48803570e-10, -1.08063526e+00, -1.34050247e-09,
-        -1.08063526e+00,  6.48803545e-10,  1.08063526e+00,  1.69124988e-09,
-        -4.86398140e-09, -2.83866190e-03,  7.92753681e-09,  2.75647608e-09,
-        -6.05048348e-18,  4.30372771e-10, -1.06604418e-02, -2.08300861e-10,
-        1.06604411e-02, -4.30372777e-10,  1.06604430e-02,  2.08300867e-10,
-        -1.06604437e-02])
+def hopper_initial_state():
+    return jnp.array([0.0, -0.245, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
 if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
 
     dt = 0.01
-    horizon = 256
-    shots = 128
+    horizon = 512
+    shots = 512
     steps = 3000
 
-    iterations = 10
+    iterations = 1
     elite_frac = 0.1
     keep_frac = 0.3
     smoothing = 0.1
@@ -38,14 +30,16 @@ if __name__ == '__main__':
     rho = 0.9
     gamma = 1.0
 
-    name = f'ANT-h={horizon}-gamma={gamma}-shots={shots}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-dt={dt}'
+    name = f'HOPPER-h={horizon}-gamma={gamma}-shots={shots}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-dt={dt}'
 
-    dyn = Dynamics('xml/ant.xml', dt = 0.01)
+    ## initialize dynamics
+    dyn = Dynamics('xml/hopper.xml')
     step = make_step(dyn)
-    print(dyn.state_dim, dyn.control_dim)
+    unroll = make_unroll(step)
 
+    ## initialize agent
     mpc = CEM(
-        dyn, 
+        dyn,
         make_compute_rate(dyn, alpha, gamma),
         shots, 
         horizon, 
@@ -55,8 +49,12 @@ if __name__ == '__main__':
         smoothing,
         rho)
     
-    ## initial state of ant
-    xt = ant_initial_state()
+    ## get initial state
+    xt = hopper_initial_state()
+
+    # U = jnp.zeros((horizon, dyn.control_dim))
+    # X = unroll(xt, U)
+    # dyn.render(X, path = 'hopper.mp4', skip = 1)
 
     X = jnp.zeros((steps + 1, dyn.state_dim))
     X = X.at[0].set(xt)
