@@ -1,30 +1,46 @@
 import jax
-from jax import Array
 from jax import numpy as jnp
-from einops import einsum
 import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step, make_unroll
+from val.cem import CEM
+from val.info import make_compute_rate
 
 if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
-    # dt = 0.01 ## double
-    # dt = 0.05 ## single
-    # horizon = 1000
-    horizon = 1000 ## single
-    shots = 256
-    eps = 0.2
-    iterations = 5
-    steps = 600 ## single
-    # steps = 3000 ## double
-    window = 1
 
-    dyn = Dynamics('xml/ant.xml')
+    dt = 0.01
+    horizon = 512
+    shots = 512
+    steps = 20
+
+    iterations = 1
+    elite_frac = 0.1
+    keep_frac = 0.3
+    smoothing = 0.1
+    alpha = 1.0
+    rho = 0.9
+    gamma = 1.0
+
+    name = f'ANT-h={horizon}-gamma={gamma}-shots={shots}-iter={iterations}-elite={elite_frac}_keep={keep_frac}-smooth={smoothing}-alpha={alpha}-dt={dt}'
+
+    dyn = Dynamics('xml/ant.xml', dt = 0.01)
+    step = make_step(dyn)
     print(dyn.state_dim, dyn.control_dim)
 
-    step = make_step(dyn)
+    mpc = CEM(
+        dyn, 
+        make_compute_rate(dyn, alpha, gamma),
+        shots, 
+        horizon, 
+        iterations, 
+        elite_frac,
+        keep_frac,
+        smoothing,
+        rho)
     
+    ## initial state of ant
     xt = jnp.array([
         4.63033074e-09, -1.33166722e-08,  5.88738445e-01,  1.00000000e+00,
         4.03076686e-10,  1.40153441e-10,  2.18994597e-19,  1.34050243e-09,
@@ -35,15 +51,31 @@ if __name__ == '__main__':
         1.06604411e-02, -4.30372777e-10,  1.06604430e-02,  2.08300867e-10,
         -1.06604437e-02])
 
-    unroll = make_unroll(step)
+    X = jnp.zeros((steps + 1, dyn.state_dim))
+    X = X.at[0].set(xt)
 
-    low = dyn.mjx_model.actuator_ctrlrange[:, 0]
-    high = dyn.mjx_model.actuator_ctrlrange[:, 1]
+    hist = jnp.zeros(steps)
 
-    U = jnp.zeros((horizon, dyn.control_dim))# + jax.random.normal(key, (horizon, dyn.control_dim)) * 0.1
-    U = U.clip(low, high)
-    X = unroll(xt, U)
+    for t in range(steps):
+        key, subkey = jax.random.split(key)
+        ut, J = mpc(xt, subkey)
+        xt = step(xt, ut)
+        print(t, xt, ut, J)
 
-    print(X[-1])
-    dyn.render(X, path = 'ant.mp4', skip = 1)
+        X = X.at[t+1].set(xt)
+        hist = hist.at[t].set(J)
+
+    jnp.save(name + '-hist.npy', hist)
+    jnp.save(name + '-traj.npy', X)
+
+    fig, ax = plt.subplots(1, 1)
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('nats / s')
+    T = jnp.arange(0, steps)
+    ax.plot(T * dt, hist)
+    fig.tight_layout()
+    fig.savefig(name + '.png', dpi = 300)
+    plt.show()
+
+    dyn.render(X, path = name + '.mp4', skip = 1, distance = 4)
 
