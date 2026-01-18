@@ -18,11 +18,11 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(seed)
 
     dt = 0.01
-    horizon = 512
+    horizon = 256
     shots = 512
     steps = 3000
 
-    iterations = 1
+    iterations = 5
     elite_frac = 0.1
     keep_frac = 0.3
     smoothing = 0.1
@@ -83,4 +83,3 @@ if __name__ == '__main__':
     plt.show()
 
     dyn.render(X, path = name + '.mp4', skip = 1, distance = 4)
-
