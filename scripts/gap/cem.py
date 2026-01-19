@@ -1,6 +1,6 @@
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-os.environ['MUJOCO_GL'] = 'egl'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
 from jax import Array
@@ -258,8 +258,8 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(seed)
     
     ## sp
-    # shots = 512
-    # horizon = 200 #200
+    shots = 512
+    horizon = 200 #200
 
     ## dp
     # shots = 2048
