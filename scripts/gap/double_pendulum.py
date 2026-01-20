@@ -15,7 +15,7 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(seed)
 
     dt = 0.01
-    horizon = 1024
+    horizon = 512
     shots = 512
     steps = 3000
 

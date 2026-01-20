@@ -50,10 +50,10 @@ if __name__ == '__main__':
     
     fig.suptitle('MPC on Single Pendulum')
 
-    ax[0].set_ylabel('Information Production (nats/s)')
+    ax[0].set_ylabel('CIP (nats/s)')
     ax[0].set_ylim(0.0, 1.5)
 
-    ax[1].set_ylabel('Absolute Angle From Top (rad)')
+    ax[1].set_ylabel('Angle From Top (rad)')
     ax[1].set_xlabel('Environment Time (s)')
 
     for h in horizons:
