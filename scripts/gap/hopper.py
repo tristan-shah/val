@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
@@ -30,7 +30,7 @@ if __name__ == '__main__':
     rho = 0.9
     gamma = 1.0
 
-    name = f'HOPPER-gear=50-h={horizon}-gamma={gamma}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-alpha={alpha}-dt={dt}'
+    name = f'HOPPER-gear=25-h={horizon}-gamma={gamma}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-alpha={alpha}-dt={dt}'
 
     ## initialize dynamics
     dyn = Dynamics('xml/hopper.xml')
