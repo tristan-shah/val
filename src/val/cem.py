@@ -37,7 +37,7 @@ class CEM:
             horizon: int, 
             iterations: int, 
             elite_frac: float,
-            keep_frac: float,
+            # keep_frac: float,
             smoothing: float,
             rho: float = 0.9):
         
@@ -56,7 +56,7 @@ class CEM:
         self.control_dim = dyn.control_dim
         self.iterations = iterations
         self.n_elite = max(1, int(elite_frac * shots))
-        self.n_keep = max(1, int(keep_frac * self.n_elite))
+        # self.n_keep = max(1, int(keep_frac * self.n_elite))
         self.smoothing = smoothing
         self.rho = rho
 

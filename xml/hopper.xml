@@ -1,4 +1,3 @@
-
 <mujoco model="hopper">
   <compiler angle="degree" coordinate="local" inertiafromgeom="true"/>
   
@@ -7,7 +6,7 @@
   <default>
     <joint armature="0.01" damping="1" limited="true"/>
     <geom conaffinity="1" condim="1" contype="1" margin="0.001" material="geom" rgba="0.8 0.6 .4 1" solimp=".8 .8 .01" solref=".02 1"/>
-    <motor ctrllimited="true" ctrlrange="-1.0 1.0"/>
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" gear="50"/>
   </default>
 
   <asset>
@@ -47,8 +46,12 @@
   </worldbody>
 
   <actuator>
-    <motor gear="200.0" joint="thigh_joint" name="thigh_motor"/>
-    <motor gear="200.0" joint="leg_joint" name="leg_motor"/>
-    <motor gear="200.0" joint="foot_joint" name="foot_motor"/>
+    <!-- <motor gear="200.0" joint="thigh_joint" name="thigh_motor"/> -->
+    <!-- <motor gear="200.0" joint="leg_joint" name="leg_motor"/> -->
+    <!-- <motor gear="200.0" joint="foot_joint" name="foot_motor"/> -->
+
+    <motor joint="thigh_joint" name="thigh_motor"/>
+    <motor joint="leg_joint" name="leg_motor"/>
+    <motor joint="foot_joint" name="foot_motor"/>
   </actuator>
 </mujoco>
