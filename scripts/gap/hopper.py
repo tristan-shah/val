@@ -1,6 +1,6 @@
-# import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-# os.environ['MUJOCO_GL'] = 'egl'
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
 from jax import numpy as jnp
@@ -18,18 +18,18 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(seed)
 
     dt = 0.01
-    horizon = 100 #256
-    shots = 32 #512
-    steps = 200 #3000
+    horizon = 256
+    shots = 512
+    steps = 3000
 
-    iterations = 5
+    iterations = 10
     elite_frac = 0.1
     keep_frac = 0.3
     smoothing = 0.1
     alpha = 1.0
     gamma = 1.0
 
-    name = f'HOPPER-gear=50-h={horizon}-gamma={gamma}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-alpha={alpha}-dt={dt}'
+    name = f'HOPPER-gear=25-h={horizon}-gamma={gamma}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-alpha={alpha}-dt={dt}'
 
     ## initialize dynamics
     dyn = Dynamics('xml/hopper.xml')
