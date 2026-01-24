@@ -17,11 +17,10 @@ if __name__ == '__main__':
     dt = 0.01
     horizon = 512
     shots = 512
-    steps = 3000
+    steps = 2000
 
     iterations = 10
     elite_frac = 0.1
-    keep_frac = 0.3
     smoothing = 0.1
     alpha = 1.0
     rho = 0.9
@@ -40,7 +39,6 @@ if __name__ == '__main__':
         horizon, 
         iterations, 
         elite_frac,
-        keep_frac,
         smoothing,
         rho)
     
