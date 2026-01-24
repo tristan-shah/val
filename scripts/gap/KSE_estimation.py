@@ -1,117 +1,123 @@
 import jax 
 from jax import Array
 from jax import numpy as jnp
+from einops import einsum
 import matplotlib.pyplot as plt
 
 from val import make_unroll
 from val.info import compute_volume
-
-def make_lorenz_step(dt: float, sigma=16.0, rho=45.92, beta=4.0):
-
-    def step(state: Array, control: Array):
-
-        x, y, z = state
-
-        dx = sigma * (y - x)
-        dy = x * (rho - z) - y
-        dz = x * y - beta * z
-
-        return jnp.array([
-            x + dt * dx,
-            y + dt * dy,
-            z + dt * dz
-        ])
-    
-    return jax.jit(step)
-
-def plot_lorenz(X):
-    """
-    X: Array of shape (T, 3)
-    """
-    X = jnp.asarray(X)
-
-    x = X[:, 0]
-    y = X[:, 1]
-    z = X[:, 2]
-
-    # --- 3D phase plot ---
-    fig = plt.figure(figsize=(8, 6))
-    ax = fig.add_subplot(projection="3d")
-
-    ax.plot(x, y, z, lw=0.8)
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    ax.set_zlabel("z")
-    ax.set_title("Lorenz Attractor")
-
-    plt.tight_layout()
-    plt.show()
+from val.utils import estimate_lyapunov_hist
 
 @jax.jit
-def compute_ol(fx: Array):
+def compute_inverse(fx: Array, fu: Array, alpha: float, gamma: float):
     
     dx = fx.shape[-1]
     du = fu.shape[-1]
 
-    Q = jnp.eye(dx)
+    Q = jnp.eye(dx) * 1.0
+    R = jnp.eye(du) * alpha
 
-    def scan_fn(carry: tuple[Array, Array], inputs: tuple[Array, Array]):
+    def scan_fn(carry: tuple[Array, Array, Array], inputs: tuple[Array, Array]):
         
-        ol_t = carry
-        fx_t = inputs
+        Y_t, V_t, W_t = carry
+        fx_t, fu_t = inputs
 
-        ol_t = ol_t + jnp.linalg.slogdet(Q + fx_t.T @ fx_t).logabsdet
+        Y_t = 0.5 * (Y_t + Y_t.T)
 
-        carry = ol_t
+        S_inv = jnp.linalg.inv(R + gamma * fu_t.T @ V_t @ fu_t)
+        ## feedback gain
+        K_t = - gamma * S_inv @ fu_t.T @ V_t @ fx_t
+        ## open loop entropy
+        Y_t = Q + gamma * fx_t.T @ Y_t @ fx_t
+        # Y_t = Q - fx_t.T @ jnp.linalg.inv(Y_t + fx_t @ fx_t.T) @ fx_t
+        ## riccati equation
+        V_t = Q + gamma * fx_t.T @ V_t @ fx_t - gamma ** 2 * fx_t.T @ V_t @ fu_t @ S_inv @ fu_t.T @ V_t @ fx_t
+        ## closed loop entropy
+        W_t = Q + gamma * (fx_t + fu_t @ K_t).T @ W_t @ (fx_t + fu_t @ K_t)
 
-        return carry, carry
+        carry = (Y_t, V_t, W_t)
+
+        return carry, (Y_t, V_t, W_t, K_t)
     
-    _, ol = jax.lax.scan(scan_fn, init = jnp.linalg.slogdet(Q).logabsdet, xs = fx, reverse = True)
-    return ol
+    _, (Y, V, W, K) = jax.lax.scan(scan_fn, init = (Q, Q, Q), xs = (fx, fu), reverse = True)
+    return Y, V, W, K
+
+
+# @jax.jit
+# def compute_log_eigen_qr(fx: Array, gamma: float = 1.0):
+#     """
+#     Proper stable log-eigenvalue recursion for Y_t = Q + gamma F_t^T Y_{t+1} F_t
+#     using full square-root QR decomposition.
+#     """
+#     T, dx, _ = fx.shape
+#     S_next = jnp.linalg.cholesky(jnp.eye(dx))  # terminal S_T = sqrt(Q)
+
+#     def scan_fn(S_next, F_t):
+#         # stack for QR
+#         A = jnp.vstack([jnp.linalg.cholesky(jnp.eye(dx)), jnp.sqrt(gamma) * (S_next @ F_t)])
+#         _, R = jnp.linalg.qr(A, mode='reduced')
+#         S_t = R
+#         # log eigenvalues of Y_t
+#         log_eigs_Y_t = 2 * jnp.log(jnp.abs(jnp.linalg.svd(S_t, compute_uv=False)))
+#         return S_t, log_eigs_Y_t
+
+#     _, log_eigs = jax.lax.scan(scan_fn, init=S_next, xs=fx, reverse=True)
+#     return log_eigs
 
 if __name__ == '__main__':
 
     dt = 0.01
     horizon = 100 #40
-
-    # A = jnp.array([
-    #     [3.0, 2.0],
-    #     [1.0, 0.1]
-    # ])
-
+    T = jnp.arange(1, horizon + 1)
 
     A = jnp.array([
-        [0.1, 0.0, 0.1],
-        [1.0, 0.1, 2.0],
-        [1.0, 2.0, 0.4]
+        [2.0, 0.0, -1.0],
+        [5.0, 10.0, 2.0],
+        [1.0, 0.5, 5.0]
+    ])
+
+    B = jnp.array([
+        [-0.1],
+        [0.0],
+        [0.001]
     ])
 
 
     LE = jnp.log(jnp.abs(jnp.linalg.eigvals(A)))
-    print(LE)
 
     dx = A.shape[0]
 
     fx = jnp.zeros((horizon, dx, dx))
     fu = jnp.zeros((horizon, dx, 1))
     fx = fx.at[:].set(A)
+    fu = fu.at[:].set(B)
 
-    Y, V, W, K = compute_volume(fx, fu, 1.0, 1.0)
 
-    T = jnp.arange(1, horizon + 1)
+    Y, V, W, K = compute_inverse(fx, fu, 1.0, 1.0)
+
+    D = fx + einsum(fu, K, 'b x1 u, b u x2 -> b x1 x2')
+
+    kse_ol = estimate_lyapunov_hist(fx, 1.0).clip(min = 0.0).sum(axis = 1)
+    kse_cl = estimate_lyapunov_hist(D, 1.0).clip(min = 0.0).sum(axis = 1)
+
+
+    # ol_entropy = -jnp.linalg.slogdet(Y).logabsdet / (2 * jnp.flip(T))
     ol_entropy = jnp.linalg.slogdet(Y).logabsdet / (2 * jnp.flip(T))
-    ol = compute_ol(fx) / (2 * jnp.flip(T))
+    cl_entropy = jnp.linalg.slogdet(W).logabsdet / (2 * jnp.flip(T))
 
     fig, ax = plt.subplots(1, 1)
     ax.set_title(f'Estimation of KSE for Linear System')
     ax.set_xlabel('Backwards Recursion Step')
     ax.set_ylabel('KSE (bits/iter)')
-    # ax.set_ylim(0.0, jnp.max(ol) * 1.2)
-    ax.plot(ol_entropy, label = 'Estimated')
-    # ax.plot(ol, label = 'Estimated')
-    ax.hlines(jnp.sum(LE.clip(min = 0.0)), xmin = 0, xmax = horizon, colors = 'r', linestyles = 'dashed', label = 'True KSE')
+    ax.plot(ol_entropy, label = 'Estimated Open-Loop')
+    ax.plot(cl_entropy, label = 'Estimated Closed-Loop')
+    ax.plot(kse_ol, label = 'Gram-Shmidt OL')
+    ax.plot(kse_cl, label = 'Gram-Shmidt CL')
+    # ax.plot(eigs.sum(axis = 1) / (2 * jnp.flip(T)))
+    
+    ax.hlines(jnp.sum(LE.clip(min = 0.0)), xmin = 0, xmax = horizon, colors = 'r', linestyles = 'dashed', label = 'True Open-Loop')
 
-    ax.legend()
+    ax.legend(title = 'KSE')
     fig.tight_layout()
     fig.savefig('KSE.png', dpi = 300)
     plt.show()

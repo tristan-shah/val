@@ -15,7 +15,7 @@ if __name__ == '__main__':
     # X = jnp.load('ANT-h=256-gamma=1.0-shots=128-iter=10-elite=0.1_keep=0.3-smooth=0.1-alpha=1.0-dt=0.01-traj.npy')
     # X = jnp.load('HOPPER-h=256-gamma=1.0-shots=512-iter=5-elite=0.1_keep=0.3-smooth=0.1-alpha=1.0-dt=0.01-traj.npy')
 
-    name = 'HOPPER-gear=25-h=256-gamma=1.0-shots=512-iter=5-elite=0.1-smooth=0.1-alpha=1.0-dt=0.01'
+    name = 'HOPPER-gear=25-h=256-gamma=1.0-shots=512-iter=10-elite=0.1-smooth=0.1-alpha=1.0-dt=0.01'
     X = jnp.load(name + '-traj.npy')
 
     dyn.render(X, path = name + '.mp4', skip = 1)

@@ -13,7 +13,7 @@ def compute_volume(fx: Array, fu: Array, alpha: float, gamma: float):
     Q = jnp.eye(dx) * 1.0
     R = jnp.eye(du) * alpha
 
-    def scan_fn(carry: tuple[Array, Array], inputs: tuple[Array, Array]):
+    def scan_fn(carry: tuple[Array, Array, Array], inputs: tuple[Array, Array]):
         
         Y_t, V_t, W_t = carry
         fx_t, fu_t = inputs

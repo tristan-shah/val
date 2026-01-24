@@ -19,29 +19,30 @@ def plot_trajectory_time_condensed(
     l0=1.0,
     l1=1.0,
     total_width=10.0,
-    link_color="#c49a6c",
-    joint_color="#8b5a2b",
-    ground_color="#7fbf7f",
-    sampling_strategy="uniform",  # "uniform", "sqrt", or "log"
-    filename=None
+    link_color='#c49a6c',
+    joint_color='#8b5a2b',
+    ground_color='#7fbf7f',
+    sampling_strategy='uniform',  # 'uniform', 'sqrt', or 'log'
+    filename = None,
+    timespan = None
 ):
-    """
+    '''
     DIAYN-style condensed trajectory:
     time mapped to a fixed horizontal span.
     
     sampling_strategy:
-        - "uniform": evenly spaced samples
-        - "sqrt": denser at beginning (square root spacing)
-        - "log": very dense at beginning (logarithmic spacing)
-    """
+        - 'uniform': evenly spaced samples
+        - 'sqrt': denser at beginning (square root spacing)
+        - 'log': very dense at beginning (logarithmic spacing)
+    '''
     x0, y0, x1, y1 = double_pendulum_positions(theta0, theta1, l0, l1)
     
     # Choose sampling strategy
-    if sampling_strategy == "sqrt":
+    if sampling_strategy == 'sqrt':
         # Square root spacing - denser at beginning
         t_normalized = np.linspace(0, 1, sample) ** 2
         idx = (t_normalized * (len(theta0) - 1)).astype(int)
-    elif sampling_strategy == "log":
+    elif sampling_strategy == 'log':
         # Logarithmic spacing - very dense at beginning
         t_normalized = np.logspace(0, 1, sample) - 1
         t_normalized = t_normalized / t_normalized[-1]
@@ -97,43 +98,58 @@ def plot_trajectory_time_condensed(
         lw=4,
     )
 
-    ax.set_aspect("equal")
-    ax.axis("off")
-    ax.set_xlim(-0.3, total_width + 0.3)
-    ax.set_ylim(ground_y - 0.2, 2.2)
+    ax.set_aspect('equal')
+    # ax.axis('off')
+    ax.yaxis.set_visible(False)
+    # Turn off the frame
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+    if timespan is not None:
+        n_ticks = 7
+        tick_positions = np.linspace(0, total_width, num=n_ticks)  # positions along the x-axis
+        tick_labels = [str(i) for i in range(0, n_ticks)]
+
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(tick_labels)
+
+        ax.set_xlim(-0.3, total_width + 0.3)
+        ax.set_ylim(ground_y - 0.2, 2.2)
+        ax.set_xlabel('Time (s)')
 
     plt.tight_layout()
     if filename:
-        plt.savefig(filename, dpi=300, bbox_inches="tight")
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
     plt.show()
 
+name = 'DOUBLE_PENDULUM-h=512-gamma=1.0-shots=512-iter=10-elite=0.1-smooth=0.1-alpha=1.0-dt=0.01'
 
 # ---- Load and process data ----
-X = jnp.load('DOUBLE_PENDULUM-h=512-gamma=1.0-shots=512-iter=10-elite=0.1-smooth=0.1-alpha=1.0-dt=0.01-traj.npy')
+X = jnp.load(name + '-traj.npy')
 
 # Focus on swing-up stage (before timestep 800)
 T_swing_up = 600
+t = jnp.arange(T_swing_up) * 0.01
 theta0 = X[:T_swing_up, 0]
 theta1 = X[:T_swing_up, 1]
 
-hist = jnp.load('DOUBLE_PENDULUM-h=512-gamma=1.0-shots=512-iter=10-elite=0.1-smooth=0.1-alpha=1.0-dt=0.01-hist.npy')[:T_swing_up]
+hist = jnp.load(name + '-hist.npy')[:T_swing_up]
 
-# # Visualize the trajectory with denser sampling at the beginning
-# plot_trajectory_time_condensed(
-#     theta0,
-#     theta1,
-#     sample=100,
-#     total_width=15,#6.5,
-#     sampling_strategy="uniform",  # Try "sqrt" or "log" for denser early sampling
-#     filename="swingup_trajectory.png",
-# )
-
-t = jnp.arange(T_swing_up) * 0.01
+# Visualize the trajectory with denser sampling at the beginning
+plot_trajectory_time_condensed(
+    theta0,
+    theta1,
+    sample=100,
+    total_width=15,#6.5,
+    sampling_strategy='uniform',  # Try 'sqrt' or 'log' for denser early sampling
+    filename='double_pendulum_traj.png',
+    timespan = t
+)
 
 fig, ax = plt.subplots(1, 1, figsize = (6, 3))
 ax.set_xlabel('Time (s)')
-ax.set_ylabel('bits/s')
+ax.set_ylabel('nats/s')
 ax.plot(t, hist)
 fig.tight_layout()
-fig.savefig('double_pendulum_cip.png', dpi = 300)
+fig.savefig('double_pendulum_hist.png', dpi = 300)
 plt.show()

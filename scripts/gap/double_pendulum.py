@@ -27,7 +27,7 @@ if __name__ == '__main__':
     rho = 0.9
     gamma = 1.0
 
-    name = f'DOUBLE_PENDULUM-h={horizon}-gamma={gamma}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-alpha={alpha}-dt={dt}'
+    name = f'DOUBLE_PENDULUM-gear=6.0-h={horizon}-gamma={gamma}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-alpha={alpha}-dt={dt}'
 
     dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
     step = make_step(dyn)
