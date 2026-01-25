@@ -18,8 +18,8 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(seed)
 
     dt = 0.01
-    horizon = 256
-    shots = 512
+    horizon = 512
+    shots = 256 #512
     steps = 3000
 
     iterations = 10

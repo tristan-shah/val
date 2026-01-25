@@ -79,6 +79,20 @@ def plot_single_pendulum_time_condensed(
                    s=5,
                    color='black',
                    zorder=4)
+        
+        # --- CART at the base (attached to pivot) ---
+        cart_width = 0.2
+        cart_height = 0.1
+        cart_color = color  # same as pendulum color
+        rect = plt.Rectangle(
+            (x_offset - cart_width/2, -cart_height/2),  # centered at pivot
+            cart_width,
+            cart_height,
+            facecolor=cart_color,
+            edgecolor='black',
+            zorder=3
+        )
+        ax.add_patch(rect)
 
     # Ground line
     ax.plot([-0.3, total_width + 0.3],
@@ -111,14 +125,14 @@ def plot_single_pendulum_time_condensed(
 # ----------------------------
 # Example usage
 # ----------------------------
-name = 'SINGLE_PENDULUM-h=600-gamma=1.0-shots=512-iter=1-elite=0.1-smooth=0.1-alpha=1.0-dt=0.01'
+name = 'CART_POLE-h=400-gamma=1.0-shots=512-iter=1-elite=0.1-smooth=0.1-alpha=1.0-dt=0.01'
 
 # Load trajectory data
 X = jnp.load(name + '-traj.npy')
 T_swing_up = 1000  # <-- can change freely
 dt = 0.01
 t = jnp.arange(T_swing_up) * dt
-theta = X[:T_swing_up, 0]  # single angle
+theta = X[:T_swing_up, 1]  # single angle
 
 hist = jnp.load(name + '-hist.npy')[:T_swing_up]
 
@@ -129,7 +143,7 @@ plot_single_pendulum_time_condensed(
     sample=150,
     total_width=None,  # will automatically match real time
     sampling_strategy='uniform',
-    filename='single_pendulum_traj.png'
+    filename='cart_pole_traj.png'
 )
 
 # Plot bits/s over time (automatically matches trajectory)
@@ -138,5 +152,5 @@ ax.set_xlabel('Time (s)')
 ax.set_ylabel('nats/s')
 ax.plot(t, hist)
 fig.tight_layout()
-fig.savefig('single_pendulum_hist.png', dpi=300)
+fig.savefig('cart_pole_hist.png', dpi=300)
 plt.show()
