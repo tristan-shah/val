@@ -81,7 +81,7 @@ class Dynamics:
             distance: float = 3.0,
             azimuth: float = 90.0,
             elevation: float = 0.0,
-            skip: int = 5
+            skip: int = 1
             ):
 
         renderer = mujoco.Renderer(self.model, height = 1080, width = 1920)

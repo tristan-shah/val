@@ -54,16 +54,18 @@ def make_compute_rate(dyn: Dynamics, alpha: float = 1.0, gamma: float = 1.0):
         ## linearize the batch of trajectories
         fx_batch, fu_batch = batch_traj_linearize(X_batch[:, :-1, :], U_batch)
         # ## compute entropy of each trajectory (manually setting alpha = 1.0)
-        Y, V, W, _ = batch_compute_volume(fx_batch, fu_batch, alpha, gamma)
-        ## compute entropy
-        ol_entropy = jnp.linalg.slogdet(Y).logabsdet ## open loop
-        cl_entropy = jnp.linalg.slogdet(W).logabsdet ## closed loop
-        ## convert entropy into information
-        information = ol_entropy - cl_entropy
+        Y, _, W, _ = batch_compute_volume(fx_batch, fu_batch, alpha, gamma)
 
         horizon = U_batch.shape[1]
         T = jnp.arange(1, horizon + 1)
-        rate = information / (2 * jnp.flip(T) * dt)
+
+        ## compute entropy
+        ol_entropy = jnp.linalg.slogdet(Y).logabsdet / (2 * jnp.flip(T) * dt) ## open loop
+        cl_entropy = jnp.linalg.slogdet(W).logabsdet / (2 * jnp.flip(T) * dt) ## closed loop
+        ## convert entropy into information
+        information = ol_entropy - cl_entropy
+        
+        rate = information
 
         return rate[:, 0]
     

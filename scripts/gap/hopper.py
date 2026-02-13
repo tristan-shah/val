@@ -1,6 +1,6 @@
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-os.environ['MUJOCO_GL'] = 'egl'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
 from jax import numpy as jnp
@@ -49,36 +49,38 @@ if __name__ == '__main__':
     ## get initial state
     xt = hopper_initial_state()
 
-    # U = jnp.ones((horizon, dyn.control_dim))
+    xt = jnp.array([ 1.20725391, -1.19251975, -0.88656505, -2.44163909, -0.56098203,  0.76719026, 0.04809566,  0.17861594, -0.83006751, -0.5187187, -0.52615521, -0.30357754])
+
+    U = jnp.zeros((horizon, dyn.control_dim))
     # U = jax.random.uniform(key, (horizon, dyn.control_dim)) * 2 - 1.0
-    # print(dyn.mjx_model.actuator_gear)
-    # X = unroll(xt, U)
-    # dyn.render(X, path = 'hopper.mp4', skip = 1)
+    print(dyn.mjx_model.actuator_gear)
+    X = unroll(xt, U)
+    dyn.render(X, path = 'hopper.mp4', skip = 1)
 
-    X = jnp.zeros((steps + 1, dyn.state_dim))
-    X = X.at[0].set(xt)
+    # X = jnp.zeros((steps + 1, dyn.state_dim))
+    # X = X.at[0].set(xt)
 
-    hist = jnp.zeros(steps)
+    # hist = jnp.zeros(steps)
 
-    for t in range(steps):
-        key, subkey = jax.random.split(key)
-        ut, J = mpc(xt, subkey)
-        xt = step(xt, ut)
-        print(t, xt, ut, J)
+    # for t in range(steps):
+    #     key, subkey = jax.random.split(key)
+    #     ut, J = mpc(xt, subkey)
+    #     xt = step(xt, ut)
+    #     print(t, xt, ut, J)
 
-        X = X.at[t+1].set(xt)
-        hist = hist.at[t].set(J)
+    #     X = X.at[t+1].set(xt)
+    #     hist = hist.at[t].set(J)
 
-    jnp.save(name + '-hist.npy', hist)
-    jnp.save(name + '-traj.npy', X)
+    # jnp.save(name + '-hist.npy', hist)
+    # jnp.save(name + '-traj.npy', X)
 
-    fig, ax = plt.subplots(1, 1)
-    ax.set_xlabel('Time (s)')
-    ax.set_ylabel('nats / s')
-    T = jnp.arange(0, steps)
-    ax.plot(T * dt, hist)
-    fig.tight_layout()
-    fig.savefig(name + '.png', dpi = 300)
-    plt.show()
+    # fig, ax = plt.subplots(1, 1)
+    # ax.set_xlabel('Time (s)')
+    # ax.set_ylabel('nats / s')
+    # T = jnp.arange(0, steps)
+    # ax.plot(T * dt, hist)
+    # fig.tight_layout()
+    # fig.savefig(name + '.png', dpi = 300)
+    # plt.show()
 
-    dyn.render(X, path = name + '.mp4', skip = 1, distance = 4)
+    # dyn.render(X, path = name + '.mp4', skip = 1, distance = 4)

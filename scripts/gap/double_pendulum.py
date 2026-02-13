@@ -1,6 +1,6 @@
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-os.environ['MUJOCO_GL'] = 'egl'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
 from jax import numpy as jnp
@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from val import Dynamics, make_step, make_unroll
 from val.cem import CEM
 from val.info import make_compute_rate
+from val.cip import make_compute_cip
 
 if __name__ == '__main__':
     seed = 0
@@ -26,15 +27,20 @@ if __name__ == '__main__':
     rho = 0.9
     gamma = 1.0
 
-    name = f'DOUBLE_PENDULUM-gear=6.0-h={horizon}-gamma={gamma}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-alpha={alpha}-dt={dt}'
+    name = f'logdomain-DOUBLE_PENDULUM-gear=6.0-h={horizon}-gamma={gamma}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-alpha={alpha}-dt={dt}'
 
     dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
     step = make_step(dyn)
     print(dyn.state_dim, dyn.control_dim)
 
+    compute_cip = make_compute_cip(dyn)
+    ## vectorize over batches of trajectories
+    batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
+
     mpc = CEM(
-        dyn, 
-        make_compute_rate(dyn, alpha, gamma),
+        dyn,
+        # make_compute_rate(dyn, alpha, gamma),
+        batch_compute_cip,
         shots, 
         horizon, 
         iterations, 
@@ -72,4 +78,3 @@ if __name__ == '__main__':
     plt.show()
 
     dyn.render(X, path = name + '.mp4', skip = 1, distance = 4)
-
