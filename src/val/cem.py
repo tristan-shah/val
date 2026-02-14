@@ -1,6 +1,7 @@
 import jax
 from jax import Array
 from jax import numpy as jnp
+import colorednoise
 
 from val import Dynamics
 from val.utils import ar1_noise
@@ -72,6 +73,9 @@ class CEM:
             key, subkey = jax.random.split(key)
             ## generate correlated noise
             noise = ar1_noise(subkey, self.shots, self.horizon, self.control_dim, self.rho)
+            # noise = colorednoise.powerlaw_psd_gaussian(1.0, size = (self.shots, self.control_dim, self.horizon))
+            # noise = jnp.permute_dims(jnp.array(noise), (0, 2, 1))
+
             ## generate a batch of random control signals
             U_batch = self.mean[None, :, :] + self.std[None, :, :] * noise
             ## clip the sampled sequences within the allowable range

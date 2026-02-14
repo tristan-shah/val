@@ -6,6 +6,8 @@ import jax
 from jax import numpy as jnp
 import matplotlib.pyplot as plt
 
+import colorednoise
+
 from val import Dynamics, make_step, make_unroll
 from val.cem import CEM
 from val.cip import make_compute_cip
@@ -13,19 +15,21 @@ from val.cip import make_compute_cip
 if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
+    print(jax.config.values['jax_enable_x64'])
 
     # dt = 0.01
     dt = 0.05
     # horizon = 650
-    horizon = 150
+    horizon = 35
     shots = 512
     # steps = 1200
     steps = 600
     iterations = 1
     elite_frac = 0.1
     smoothing = 0.1
+    rho = 0.999
     
-    name = f'SINGLE_PENDULUM-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-dt={dt}'
+    name = f'SINGLE_PENDULUM-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
 
     ## initialize dynamics
     dyn = Dynamics('xml/pendulum.xml', dt = dt)
@@ -44,18 +48,35 @@ if __name__ == '__main__':
         horizon, 
         iterations, 
         elite_frac,
-        smoothing)
+        smoothing,
+        rho)
+
+    
+    # from val.utils import ar1_noise
+    # shots = 32
+    # noise = ar1_noise(key, shots, horizon, dyn.control_dim, rho = 0.999)
+    # # noise = colorednoise.powerlaw_psd_gaussian(4.0, size = (shots, dyn.control_dim, horizon))
+
+    # fig, ax = plt.subplots(1, 1)
+    # for i in range(shots):
+    #     ax.plot(noise[i, :, 0])
+    # plt.show()
+
+
+
     
     ## get initial state
     xt = jnp.zeros(dyn.state_dim)
+
+
+
+    '''
+    Plot CIP
+    '''
     # xt = xt.at[0].set(jnp.pi)
 
     # U = jnp.zeros((shots, horizon, dyn.control_dim))
     # cip = batch_compute_cip(xt, U)
-    # print(cip.shape)
-    # mpc(xt, key)
-
-
 
     # U = jnp.zeros((horizon, dyn.control_dim))
     # cip_stable = compute_cip(xt, U)
@@ -66,9 +87,6 @@ if __name__ == '__main__':
 
     # from val.info import make_compute_rate, compute_volume
     # Y, V, W, K = compute_volume(fx, fu, 1.0, 1.0)
-
-
-
 
     # T = jnp.arange(1, horizon + 1)
     # ol_entropy = jnp.linalg.slogdet(Y).logabsdet / (2 * jnp.flip(T) * dt) ## open loop
@@ -86,11 +104,9 @@ if __name__ == '__main__':
     # plt.show()
 
 
-
-
-
-
-
+    '''
+    Run MPC
+    '''
     X = jnp.zeros((steps + 1, dyn.state_dim))
     X = X.at[0].set(xt)
 
@@ -99,6 +115,14 @@ if __name__ == '__main__':
     for t in range(steps):
         key, subkey = jax.random.split(key)
         ut, J = mpc(xt, subkey)
+
+
+        # fig, ax = plt.subplots(1, 1)
+        # ax.plot(mpc.mean)
+        # plt.show()
+        # plt.close(fig)
+
+
         xt = step(xt, ut)
         print(t, xt, ut, J)
 

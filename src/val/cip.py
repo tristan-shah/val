@@ -17,7 +17,7 @@ def compute_entropy(fx: Array, fu: Array):
         ## logdet_Y_t: log det of Y_t 
         ## logdet_W_t: log det of W_t
         ## Y_inv_t: inverse of Y_t 
-        ## W_inv_t: inverse of W_t 
+        ## W_inv_t: inverse of W_t
         ## V_t: solution to Riccati Equation
         logdet_Y_t, logdet_W_t, Y_inv_t, W_inv_t, V_t = carry
         fx_t, fu_t = inputs

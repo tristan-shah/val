@@ -1,5 +1,3 @@
-# import os
-# os.environ['MUJOCO_GL'] = 'egl'
 from typing import Optional
 
 import mujoco
@@ -7,8 +5,7 @@ from mujoco import mjx
 import jax
 ## Enable higher precision (critical for second derivatives)
 jax.config.update('jax_enable_x64', True)
-jax.config.update('jax_traceback_filtering', 'off')
-
+# jax.config.update('jax_traceback_filtering', 'off')
 from jax import numpy as jnp
 from jax import Array
 import imageio
