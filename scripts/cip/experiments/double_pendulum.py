@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
@@ -21,8 +21,9 @@ if __name__ == '__main__':
     iterations = 10
     elite_frac = 0.1
     smoothing = 0.1
+    rho = 0.999
 
-    name = f'DOUBLE_PENDULUM-gear=6.0-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-dt={dt}'
+    name = f'DOUBLE_PENDULUM-gear=6.0-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
 
     dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
     step = make_step(dyn)
@@ -39,7 +40,8 @@ if __name__ == '__main__':
         horizon, 
         iterations, 
         elite_frac,
-        smoothing)
+        smoothing,
+        rho)
     
     ## initial state
     xt = jnp.zeros(dyn.state_dim)

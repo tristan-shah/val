@@ -1,7 +1,7 @@
 import jax
 from jax import Array
 from jax import numpy as jnp
-import colorednoise
+# import colorednoise
 
 from val import Dynamics
 from val.utils import ar1_noise
