@@ -1,6 +1,6 @@
-# import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-# os.environ['MUJOCO_GL'] = 'egl'
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
 from jax import numpy as jnp
@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from val import Dynamics, make_step, make_unroll
 from val.cem import CEM
 from val.info import make_compute_rate
+from val.cip import make_compute_cip
 
 def hopper_initial_state():
     return jnp.array([0.0, -0.245, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
@@ -19,27 +20,28 @@ if __name__ == '__main__':
 
     dt = 0.01
     horizon = 512
-    shots = 512 #512
-    steps = 3000
+    shots = 512
+    steps = 2000
 
     iterations = 10
     elite_frac = 0.1
-    keep_frac = 0.3
     smoothing = 0.1
-    alpha = 1.0
-    gamma = 1.0
 
-    name = f'HOPPER-gear=25-h={horizon}-gamma={gamma}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-alpha={alpha}-dt={dt}'
+    name = f'HOPPER-gear=25-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-dt={dt}'
 
     ## initialize dynamics
     dyn = Dynamics('xml/hopper.xml')
     step = make_step(dyn)
     unroll = make_unroll(step)
 
+    compute_cip = make_compute_cip(dyn)
+    ## vectorize over batches of trajectories
+    batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
+
     ## initialize agent
     mpc = CEM(
         dyn,
-        make_compute_rate(dyn, alpha, gamma),
+        batch_compute_cip,
         shots, 
         horizon, 
         iterations, 
@@ -49,38 +51,43 @@ if __name__ == '__main__':
     ## get initial state
     xt = hopper_initial_state()
 
-    xt = jnp.array([ 1.20725391, -1.19251975, -0.88656505, -2.44163909, -0.56098203,  0.76719026, 0.04809566,  0.17861594, -0.83006751, -0.5187187, -0.52615521, -0.30357754])
+    '''
+    test passive dynamics
+    '''
+    # U = jnp.zeros((horizon, dyn.control_dim))
+    # # U = jax.random.uniform(key, (horizon, dyn.control_dim)) * 2 - 1.0
+    # X = unroll(xt, U)
+    # dyn.render(X, path = 'hopper.mp4', skip = 1)
 
-    U = jnp.zeros((horizon, dyn.control_dim))
-    # U = jax.random.uniform(key, (horizon, dyn.control_dim)) * 2 - 1.0
-    print(dyn.mjx_model.actuator_gear)
-    X = unroll(xt, U)
-    dyn.render(X, path = 'hopper.mp4', skip = 1)
 
-    # X = jnp.zeros((steps + 1, dyn.state_dim))
-    # X = X.at[0].set(xt)
 
-    # hist = jnp.zeros(steps)
+    '''
+    run mpc
+    '''
+    X = jnp.zeros((steps + 1, dyn.state_dim))
+    X = X.at[0].set(xt)
 
-    # for t in range(steps):
-    #     key, subkey = jax.random.split(key)
-    #     ut, J = mpc(xt, subkey)
-    #     xt = step(xt, ut)
-    #     print(t, xt, ut, J)
+    hist = jnp.zeros(steps)
 
-    #     X = X.at[t+1].set(xt)
-    #     hist = hist.at[t].set(J)
+    for t in range(steps):
+        key, subkey = jax.random.split(key)
+        ut, J = mpc(xt, subkey)
+        xt = step(xt, ut)
+        print(t, xt, ut, J)
 
-    # jnp.save(name + '-hist.npy', hist)
-    # jnp.save(name + '-traj.npy', X)
+        X = X.at[t+1].set(xt)
+        hist = hist.at[t].set(J)
 
-    # fig, ax = plt.subplots(1, 1)
-    # ax.set_xlabel('Time (s)')
-    # ax.set_ylabel('nats / s')
-    # T = jnp.arange(0, steps)
-    # ax.plot(T * dt, hist)
-    # fig.tight_layout()
-    # fig.savefig(name + '.png', dpi = 300)
-    # plt.show()
+    jnp.save(name + '-hist.npy', hist)
+    jnp.save(name + '-traj.npy', X)
 
-    # dyn.render(X, path = name + '.mp4', skip = 1, distance = 4)
+    fig, ax = plt.subplots(1, 1)
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('nats / s')
+    T = jnp.arange(0, steps)
+    ax.plot(T * dt, hist)
+    fig.tight_layout()
+    fig.savefig(name + '.png', dpi = 300)
+    plt.show()
+
+    dyn.render(X, path = name + '.mp4', skip = 1, distance = 4)

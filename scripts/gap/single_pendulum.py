@@ -5,14 +5,11 @@
 import jax
 from jax import numpy as jnp
 from jax import Array
-from einops import einsum
 import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step, make_unroll
-from val.cem import CEM, ar1_noise
-from val.info import make_compute_rate, compute_volume
+from val.cem import CEM
 from val.cip import make_compute_cip
-from val.utils import estimate_lyapunov_hist
 
 if __name__ == '__main__':
     seed = 0
@@ -29,7 +26,7 @@ if __name__ == '__main__':
     iterations = 1
     elite_frac = 0.1
     smoothing = 0.1
-    name = f'logdomain-SINGLE_PENDULUM-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-dt={dt}'
+    name = f'SINGLE_PENDULUM-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-dt={dt}'
 
     ## initialize dynamics
     dyn = Dynamics('xml/pendulum.xml', dt = dt)
@@ -43,7 +40,6 @@ if __name__ == '__main__':
     ## initialize agent
     mpc = CEM(
         dyn,
-        # make_compute_rate(dyn),
         batch_compute_cip,
         shots,
         horizon, 
