@@ -4,7 +4,6 @@
 
 import jax
 from jax import numpy as jnp
-from jax import Array
 import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step, make_unroll
@@ -22,10 +21,10 @@ if __name__ == '__main__':
     shots = 512
     # steps = 1200
     steps = 600
-
     iterations = 1
     elite_frac = 0.1
     smoothing = 0.1
+    
     name = f'SINGLE_PENDULUM-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-dt={dt}'
 
     ## initialize dynamics

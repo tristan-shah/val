@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step, make_unroll
 from val.cem import CEM
-from val.info import make_compute_rate
 from val.cip import make_compute_cip
 
 def hopper_initial_state():
@@ -22,7 +21,6 @@ if __name__ == '__main__':
     horizon = 512
     shots = 512
     steps = 2000
-
     iterations = 10
     elite_frac = 0.1
     smoothing = 0.1
@@ -32,7 +30,6 @@ if __name__ == '__main__':
     ## initialize dynamics
     dyn = Dynamics('xml/hopper.xml')
     step = make_step(dyn)
-    unroll = make_unroll(step)
 
     compute_cip = make_compute_cip(dyn)
     ## vectorize over batches of trajectories
@@ -54,11 +51,11 @@ if __name__ == '__main__':
     '''
     test passive dynamics
     '''
+    # unroll = make_unroll(step)
     # U = jnp.zeros((horizon, dyn.control_dim))
     # # U = jax.random.uniform(key, (horizon, dyn.control_dim)) * 2 - 1.0
     # X = unroll(xt, U)
     # dyn.render(X, path = 'hopper.mp4', skip = 1)
-
 
 
     '''

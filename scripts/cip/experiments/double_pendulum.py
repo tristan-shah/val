@@ -18,13 +18,9 @@ if __name__ == '__main__':
     horizon = 512
     shots = 512
     steps = 2000
-
     iterations = 10
     elite_frac = 0.1
     smoothing = 0.1
-    alpha = 1.0
-    rho = 0.9
-    gamma = 1.0
 
     name = f'DOUBLE_PENDULUM-gear=6.0-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-dt={dt}'
 
@@ -43,8 +39,7 @@ if __name__ == '__main__':
         horizon, 
         iterations, 
         elite_frac,
-        smoothing,
-        rho)
+        smoothing)
     
     ## initial state
     xt = jnp.zeros(dyn.state_dim)
