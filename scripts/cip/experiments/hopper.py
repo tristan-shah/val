@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
@@ -18,7 +18,7 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(seed)
 
     dt = 0.01
-    horizon = 256
+    horizon = 512
     shots = 512
     steps = 500
     iterations = 10
