@@ -1,6 +1,6 @@
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-os.environ['MUJOCO_GL'] = 'egl'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
 from jax import numpy as jnp
@@ -18,15 +18,15 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(seed)
 
     dt = 0.01
-    horizon = 600
+    horizon = 512
     shots = 512
-    steps = 2000
+    steps = 500
     iterations = 10
     elite_frac = 0.1
     smoothing = 0.1
-    rho = 0.999
+    rho = 0.9
 
-    name = f'HOPPER-gear=25-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
+    name = f'HOPPER-gear=100-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
 
     ## initialize dynamics
     dyn = Dynamics('xml/hopper.xml')
@@ -58,41 +58,43 @@ if __name__ == '__main__':
     # xt = jnp.array([-1.17430685, -0.66986028, -8.46305291, -2.16715771, -1.89754507,  0.78775427, -0.1043199,  -0.97346467,  5.77077936,  6.90764519, -4.02079525, -0.02615875])
     # xt = jnp.array([-0.52359518, -1.01024797, -7.78697348, -2.64011594, -0.90791346, -0.11269569, -0.78527831,  1.39504878, -5.60225903, -2.21421301, -4.45918144,  5.70114674])
     # xt = jnp.array([-0.70922936, -1.17690323, -6.71164888, -1.94839871, -0.53250935, -0.08287912, -0.04711833,  0.11924502,  3.27362498,  3.56487311, -1.08397781,  1.15760398])
+    xt = jnp.array([-0.18679878, -0.77642749, -2.99706669, -1.43937731, -2.15453168,  0.59842824, 0.55295064,  0.44344653,  2.84606065,  1.33817209,  0.61349928,  0.87457951])
 
-    # from val import make_unroll
-    # unroll = make_unroll(step)
+    from val import make_unroll
+    unroll = make_unroll(step)
     # U = jnp.zeros((horizon, dyn.control_dim))
-    # X = unroll(xt, U)
-    # dyn.render(X, path = 'hopper.mp4', skip = 1)
+    U = jax.random.uniform(key, (horizon, dyn.control_dim)) * 2.0 - 1.0
+    X = unroll(xt, U)
+    dyn.render(X, path = 'hopper.mp4', skip = 1)
 
 
-    '''
-    run mpc
-    '''
-    X = jnp.zeros((steps + 1, dyn.state_dim))
-    X = X.at[0].set(xt)
+    # '''
+    # run mpc
+    # '''
+    # X = jnp.zeros((steps + 1, dyn.state_dim))
+    # X = X.at[0].set(xt)
 
-    hist = jnp.zeros(steps)
+    # hist = jnp.zeros(steps)
 
-    for t in range(steps):
-        key, subkey = jax.random.split(key)
-        ut, J = mpc(xt, subkey)
-        xt = step(xt, ut)
-        print(t, xt, ut, J)
+    # for t in range(steps):
+    #     key, subkey = jax.random.split(key)
+    #     ut, J = mpc(xt, subkey)
+    #     xt = step(xt, ut)
+    #     print(t, xt, ut, J)
 
-        X = X.at[t+1].set(xt)
-        hist = hist.at[t].set(J)
+    #     X = X.at[t+1].set(xt)
+    #     hist = hist.at[t].set(J)
 
-    jnp.save(name + '-hist.npy', hist)
-    jnp.save(name + '-traj.npy', X)
+    # jnp.save(name + '-hist.npy', hist)
+    # jnp.save(name + '-traj.npy', X)
 
-    fig, ax = plt.subplots(1, 1)
-    ax.set_xlabel('Time (s)')
-    ax.set_ylabel('nats / s')
-    T = jnp.arange(0, steps)
-    ax.plot(T * dt, hist)
-    fig.tight_layout()
-    fig.savefig(name + '.png', dpi = 300)
-    plt.show()
+    # fig, ax = plt.subplots(1, 1)
+    # ax.set_xlabel('Time (s)')
+    # ax.set_ylabel('nats / s')
+    # T = jnp.arange(0, steps)
+    # ax.plot(T * dt, hist)
+    # fig.tight_layout()
+    # fig.savefig(name + '.png', dpi = 300)
+    # plt.show()
 
-    dyn.render(X, path = name + '.mp4', skip = 1, distance = 4)
+    # dyn.render(X, path = name + '.mp4', skip = 1, distance = 4)
