@@ -46,7 +46,8 @@ if __name__ == '__main__':
         horizon, 
         iterations, 
         elite_frac,
-        smoothing)
+        smoothing,
+        rho)
     
     ## get initial state
     xt = hopper_initial_state()
