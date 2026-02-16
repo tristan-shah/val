@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
@@ -26,7 +26,7 @@ if __name__ == '__main__':
     smoothing = 0.1
     rho = 0.999
 
-    gear = 100
+    gear = 50
     name = f'UNRESTRICTED_HOPPER-gear={gear}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
 
     ## initialize dynamics
@@ -55,9 +55,6 @@ if __name__ == '__main__':
     # # '''
     # # test passive dynamics
     # # '''
-    # # # xt = jnp.array([-0.95117254, -0.77809011, -8.05780964, -2.1339089, -1.9284697, 0.68816111, -1.61971951, 0.58293853, 2.61751397, 6.11707583, -2.92111298, 2.75567617])
-    # # # xt = jnp.array([-0.06082055, -1.11377958, -4.49441237, -1.2071687, -2.59668601, -0.81942782, 0.11672043, 0.36908223, 0.9374153, 5.4942232, -2.63953188, -0.13625338])
-    # # # xt = jnp.array([-0.08715446, -1.18272198, -4.66715652, -1.71564075, -2.17217936, -0.81248989, 0.06693304, 0.26217543, 0.55690369, -0.36191009, 0.67620763, -0.02986369])
     # # xt = jnp.array([-0.84561067, -0.77951274, -8.43766739, -2.59336965, -1.63642628, 0.77351244, 1.20768491, -1.31422078, 3.59244821, 1.05036794, 0.25376109, -0.07993622])
 
     # from val import make_unroll
