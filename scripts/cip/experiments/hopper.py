@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
@@ -24,7 +24,7 @@ if __name__ == '__main__':
     iterations = 10
     elite_frac = 0.1
     smoothing = 0.1
-    rho = 0.999
+    rho = 0.9
 
     gear = 50
     name = f'UNRESTRICTED_HOPPER-gear={gear}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
