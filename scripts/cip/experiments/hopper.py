@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
@@ -22,7 +22,7 @@ if __name__ == '__main__':
     shots = 512
     steps = 500
     iterations = 10
-    elite_frac = 0.1
+    elite_frac = 0.2
     smoothing = 0.1
     rho = 0.9
 
