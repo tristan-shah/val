@@ -32,7 +32,7 @@ if __name__ == '__main__':
     dt = 0.01
     horizon = 200
     shots = 128
-    steps = 500
+    steps = 1000
     iterations = 1
     elite_frac = 0.1
     smoothing = 0.1
@@ -43,7 +43,6 @@ if __name__ == '__main__':
 
     dyn = Dynamics('xml/hopper.xml', dt = dt)
 
-
     ## override default gear strength
     dyn.mjx_model = dyn.mjx_model.replace(
         actuator_gear = dyn.mjx_model.actuator_gear.at[:, 0].set(gear)
@@ -52,7 +51,7 @@ if __name__ == '__main__':
     step = make_step(dyn)
     print(dyn.state_dim, dyn.control_dim)
 
-    objective = make_compute_hopper_cost(dyn)
+    objective = make_compute_hopper_cost(dyn, goal_x = 2.0)
     batch_objective = jax.jit(jax.vmap(objective, in_axes = (None, 0)))
 
     mpc = CEM(
@@ -99,7 +98,6 @@ if __name__ == '__main__':
 
     fig, ax = plt.subplots(1, 1)
     ax.set_xlabel('Time (s)')
-    ax.set_ylabel('nats / s')
     T = jnp.arange(0, steps)
     ax.plot(T * dt, hist)
     fig.tight_layout()

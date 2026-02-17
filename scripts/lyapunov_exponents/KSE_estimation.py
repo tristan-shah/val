@@ -45,11 +45,10 @@ def inverse_method(fx: Array):
     hist = jnp.zeros(horizon)
 
     for t in reversed(range(horizon)):
+        # y = y + jnp.linalg.slogdet(I + fx[t] @ fx[t].T).logabsdet
         y = y + jnp.linalg.slogdet(O + fx[t] @ fx[t].T).logabsdet
         O = I - fx[t].T @ jnp.linalg.inv(O + fx[t] @ fx[t].T) @ fx[t]
-        # y = y + jnp.linalg.slogdet(O + fx[t].T @ fx[t]).logabsdet
-
-        # hist = hist.at[t].set(-jnp.linalg.slogdet(O).logabsdet)
+        print(jnp.linalg.eigvalsh(O))
         hist = hist.at[t].set(y)
 
     hist = hist / (2 * jnp.flip(T))
@@ -326,11 +325,11 @@ if __name__ == '__main__':
     #     [-1, -1, -5]
     # ])
 
-    A = jnp.array([
-        [0.1, 10, 0],
-        [0, 2, 0],
-        [0, 0, 3]
-    ])
+    # A = jnp.array([
+    #     [0.1, 10, 0],
+    #     [0, 2, 0],
+    #     [0, 0, 3]
+    # ])
 
     A = jax.random.normal(jax.random.PRNGKey(88888888), (3, 3)) * 2.0
 

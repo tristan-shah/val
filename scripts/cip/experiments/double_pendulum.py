@@ -1,6 +1,6 @@
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-os.environ['MUJOCO_GL'] = 'egl'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
 from jax import numpy as jnp
@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step
 from val.cem import CEM
-from val.cip import make_compute_cip
+from val.cip import make_compute_cip, make_compute_cip_approximation
 
 if __name__ == '__main__':
     seed = 0
@@ -21,15 +21,16 @@ if __name__ == '__main__':
     iterations = 10
     elite_frac = 0.1
     smoothing = 0.1
-    rho = 0.999
+    rho = 0.9
 
-    name = f'DOUBLE_PENDULUM-gear=6.0-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
+    name = f'DOUBLE_PENDULUM-gear=6.0-approximation-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
 
     dyn = Dynamics('xml/double_pendulum.xml', dt = dt)
     step = make_step(dyn)
     print(dyn.state_dim, dyn.control_dim)
 
-    compute_cip = make_compute_cip(dyn)
+    # compute_cip = make_compute_cip(dyn)
+    compute_cip = make_compute_cip_approximation(dyn)
     ## vectorize over batches of trajectories
     batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
 

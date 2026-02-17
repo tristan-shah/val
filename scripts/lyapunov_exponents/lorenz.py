@@ -140,6 +140,7 @@ def inverse_method(fx: Array, dt: float):
 
     for t in reversed(range(horizon)):
         y = y + jnp.linalg.slogdet(O + fx[t] @ fx[t].T).logabsdet
+        # y = y + jnp.linalg.slogdet(I + fx[t] @ fx[t].T).logabsdet
         O = I - fx[t].T @ jnp.linalg.inv(O + fx[t] @ fx[t].T) @ fx[t]
         hist = hist.at[t].set(y)
 

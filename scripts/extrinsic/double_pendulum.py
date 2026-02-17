@@ -100,7 +100,6 @@ if __name__ == '__main__':
 
     fig, ax = plt.subplots(1, 1)
     ax.set_xlabel('Time (s)')
-    ax.set_ylabel('nats / s')
     T = jnp.arange(0, steps)
     ax.plot(T * dt, hist)
     fig.tight_layout()

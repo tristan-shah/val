@@ -1,6 +1,7 @@
 import jax
 from jax import Array
 from jax import numpy as jnp
+from einops import einsum
 
 from val import Dynamics, make_step, make_unroll
 
@@ -75,6 +76,65 @@ def make_compute_cip(dyn: Dynamics):
         return cip[0]
     
     return jax.jit(compute_cip)
+
+
+
+@jax.jit
+def compute_feedback(fx: Array, fu: Array):
+
+    dx = fx.shape[-1]
+    du = fu.shape[-1]
+
+    Q = jnp.eye(dx)
+    R = jnp.eye(du)
+
+    def scan_fn(V_t: Array, inputs: tuple[Array, Array]):
+        
+        fx_t, fu_t = inputs
+
+        S_inv = jnp.linalg.inv(R + fu_t.T @ V_t @ fu_t)
+        ## optimal feedback gain
+        K_t = - S_inv @ fu_t.T @ V_t @ fx_t
+        ## propagate Riccati
+        V_t = Q + fx_t.T @ V_t @ fx_t - fx_t.T @ V_t @ fu_t @ S_inv @ fu_t.T @ V_t @ fx_t
+
+        return V_t, K_t
+
+    V_T = Q
+    _, K = jax.lax.scan(scan_fn, init = V_T, xs = (fx, fu), reverse = True)
+    return K
+
+@jax.jit
+def compute_entropy_approximation(fx: Array, fu: Array):
+    K = compute_feedback(fx, fu)
+    D = fx + einsum(fu, K, 't x1 u, t u x2 -> t x1 x2')
+
+    ol_matrix = einsum(fx, fx, 't x1 x, t x2 x -> t x1 x2')
+    cl_matrix = einsum(D, D, 't x1 x, t x2 x -> t x1 x2')
+
+    dx = fx.shape[-1]
+    I = jnp.eye(dx)
+
+    ol = jnp.linalg.slogdet(I + ol_matrix).logabsdet
+    cl = jnp.linalg.slogdet(I + cl_matrix).logabsdet
+
+    return ol, cl
+
+def make_compute_cip_approximation(dyn: Dynamics):
+
+    step = make_step(dyn)
+    traj_linerize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
+    unroll = make_unroll(step)
+    dt = dyn.mjx_model.opt.timestep
+
+    def compute_cip_approximation(xt: Array, U: Array):
+        X = unroll(xt, U)
+        fx, fu = traj_linerize(X[:-1], U)
+        ol, cl = compute_entropy_approximation(fx, fu)
+        cip = ol - cl
+        return jnp.mean(cip) / (2 * dt)
+    
+    return jax.jit(compute_cip_approximation)
 
 if __name__ == '__main__':
 
