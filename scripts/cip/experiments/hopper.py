@@ -1,6 +1,6 @@
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-os.environ['MUJOCO_GL'] = 'egl'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ['MUJOCO_GL'] = 'egl'
 
 import jax
 from jax import numpy as jnp
@@ -22,18 +22,22 @@ if __name__ == '__main__':
     shots = 512
     steps = 500
     iterations = 10
-    elite_frac = 0.2
+    elite_frac = 0.1
     smoothing = 0.1
     rho = 0.9
-
     gear = 25
+
     name = f'UNRESTRICTED_HOPPER-gear={gear}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
 
     ## initialize dynamics
     dyn = Dynamics('xml/unrestricted_hopper.xml', dt = 0.01)
+
+    ## override default gear strength
+    dyn.mjx_model = dyn.mjx_model.replace(
+        actuator_gear = dyn.mjx_model.actuator_gear.at[:, 0].set(gear)
+    )
     
     step = make_step(dyn)
-
     compute_cip = make_compute_cip(dyn)
     ## vectorize over batches of trajectories
     batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
@@ -52,16 +56,14 @@ if __name__ == '__main__':
     ## get initial state
     xt = hopper_initial_state()
 
-    # # '''
-    # # test passive dynamics
-    # # '''
-    # # xt = jnp.array([-0.84561067, -0.77951274, -8.43766739, -2.59336965, -1.63642628, 0.77351244, 1.20768491, -1.31422078, 3.59244821, 1.05036794, 0.25376109, -0.07993622])
-
+    # '''
+    # test passive dynamics
+    # '''
+    # xt = jnp.array([-0.84561067, -0.77951274, -8.43766739, -2.59336965, -1.63642628, 0.77351244, 1.20768491, -1.31422078, 3.59244821, 1.05036794, 0.25376109, -0.07993622])
     # from val import make_unroll
     # unroll = make_unroll(step)
     # # U = jnp.zeros((horizon, dyn.control_dim))
     # U = jax.random.uniform(key, (horizon, dyn.control_dim)) * 2.0 - 1.0
-
     # X = unroll(xt, U)
     # dyn.render(X, path = 'hopper.mp4', skip = 1)
 
