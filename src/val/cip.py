@@ -77,8 +77,6 @@ def make_compute_cip(dyn: Dynamics):
     
     return jax.jit(compute_cip)
 
-
-
 @jax.jit
 def compute_feedback(fx: Array, fu: Array):
 

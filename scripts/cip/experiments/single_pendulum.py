@@ -10,7 +10,7 @@ import colorednoise
 
 from val import Dynamics, make_step, make_unroll
 from val.cem import CEM
-# from val.cip import make_compute_cip
+from val.cip import make_compute_cip
 from val.cip import make_compute_cip_approximation
 
 if __name__ == '__main__':
@@ -18,7 +18,7 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(seed)
 
     dt = 0.05
-    horizon = 50
+    horizon = 150
     shots = 512
     steps = 600
     iterations = 1
@@ -33,8 +33,8 @@ if __name__ == '__main__':
     step = make_step(dyn)
     unroll = make_unroll(step)
 
-    # compute_cip = make_compute_cip(dyn)
-    compute_cip = make_compute_cip_approximation(dyn)
+    compute_cip = make_compute_cip(dyn)
+    # compute_cip = make_compute_cip_approximation(dyn)
     ## vectorize over batches of trajectories
     batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
 

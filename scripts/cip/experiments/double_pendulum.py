@@ -15,11 +15,11 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(seed)
 
     dt = 0.01
-    horizon = 512
+    horizon = 100 #512
     shots = 512
-    steps = 2000
-    iterations = 10
-    elite_frac = 0.1
+    steps = 500
+    iterations = 1#10
+    elite_frac = 0.3
     smoothing = 0.1
     rho = 0.9
 
@@ -46,6 +46,7 @@ if __name__ == '__main__':
     
     ## initial state
     xt = jnp.zeros(dyn.state_dim)
+    xt = xt.at[0].set(3.14)
 
     X = jnp.zeros((steps + 1, dyn.state_dim))
     X = X.at[0].set(xt)
@@ -73,4 +74,5 @@ if __name__ == '__main__':
     fig.savefig(name + '.png', dpi = 300)
     plt.show()
 
-    dyn.render(X, path = name + '.mp4', skip = 1, distance = 4)
+    # dyn.render(X, path = name + '.mp4', skip = 1, distance = 4)
+    dyn.render(X, path = name + '.mp4', distance = 5.0, skip = 2, lookat = jnp.array([0, 0, 2.2]))
