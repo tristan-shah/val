@@ -13,13 +13,13 @@ from val.cem import CEM
 from val.cip import make_compute_cip
 
 if __name__ == '__main__':
-    seed = 0
+    seed = 1
     key = jax.random.PRNGKey(seed)
 
     component = 'ol'
 
     dt = 0.05
-    horizon = 200
+    horizon = 150
     shots = 512
     steps = 600
     iterations = 1
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     smoothing = 0.1
     rho = 0.9
     
-    name = f'h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
+    name = f'seed={seed}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
     root = Path(f'results/SINGLE_PENDULUM/{component}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
