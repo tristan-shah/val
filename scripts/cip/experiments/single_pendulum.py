@@ -14,13 +14,13 @@ from val.cip import make_compute_cip
 from val.info import make_compute_rate
 
 if __name__ == '__main__':
-    seed = 4
+    seed = 3
     key = jax.random.PRNGKey(seed)
 
-    component = 'cip'
+    component = 'ol'
 
     dt = 0.05
-    horizon = 150
+    horizon = 400
     shots = 512
     steps = 600
     iterations = 1
