@@ -13,7 +13,7 @@ from val.cip import make_compute_cip, make_compute_ol_entropy, make_compute_cip_
 
 if __name__ == '__main__':
 
-    motivator = 'ol'
+    motivator = 'cip'
 
     seed = 0
     key = jax.random.PRNGKey(seed)
