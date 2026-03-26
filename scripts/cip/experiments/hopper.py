@@ -1,6 +1,6 @@
-# import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-# os.environ['MUJOCO_GL'] = 'egl'
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
 import jax
@@ -23,21 +23,20 @@ if __name__ == '__main__':
     dt = 0.01
     horizon = 512
     shots = 512
-    steps = 500
-    iterations = 10
+    steps = 1000
+    iterations = 2
     elite_frac = 0.1
     smoothing = 0.1
     rho = 0.9
-    gear = 100 #25
-
-    # name = f'UNRESTRICTED_HOPPER-gear={gear}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
-    name = f'gear={gear}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
+    gear = 50
+    
     root = Path(f'results/UNRESTRICTED_HOPPER/{component}')
+    name = f'gear={gear}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 
     ## initialize dynamics
-    dyn = Dynamics('xml/unrestricted_hopper.xml', dt = 0.01)
+    dyn = Dynamics('xml/unrestricted_hopper.xml', dt = dt)
 
     ## override default gear strength
     dyn.mjx_model = dyn.mjx_model.replace(
