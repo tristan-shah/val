@@ -10,39 +10,15 @@ import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step, make_unroll
 from val.cem import CEM
-from val.cip import make_compute_cip, compute_entropy
-from val.cip import make_compute_cip_approximation
-
-
-def make_compute_ol_entropy(dyn: Dynamics):
-
-    step = make_step(dyn)
-    traj_linerize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
-    unroll = make_unroll(step)
-    dt = dyn.mjx_model.opt.timestep
-
-    def compute_ol_entropy(xt: Array, U: Array):
-        X = unroll(xt, U)
-        fx, fu = traj_linerize(X[:-1], U)
-
-        ## calculate logdet of the recursions
-        logdet_Y, _ = compute_entropy(fx, fu)
-
-        horizon = fx.shape[0]
-        T = jnp.arange(1, horizon + 1)
-
-        ## normalize by time
-        ol = logdet_Y / (2 * jnp.flip(T) * dt)
-        return ol[0]
-    
-    return jax.jit(compute_ol_entropy)
+from val.cip import make_compute_cip, make_compute_ol_entropy
+# from val.cip import make_compute_cip_approximation
 
 if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
 
     dt = 0.05
-    horizon = 50 #200
+    horizon = 150
     shots = 512
     steps = 600
     iterations = 1
@@ -52,7 +28,6 @@ if __name__ == '__main__':
     
     name = f'h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
     root = Path('results/SINGLE_PENDULUM/OL_ENTROPY')
-
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 

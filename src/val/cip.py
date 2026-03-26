@@ -77,6 +77,31 @@ def make_compute_cip(dyn: Dynamics):
     
     return jax.jit(compute_cip)
 
+
+def make_compute_ol_entropy(dyn: Dynamics):
+
+    step = make_step(dyn)
+    traj_linerize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
+    unroll = make_unroll(step)
+    dt = dyn.mjx_model.opt.timestep
+
+    def compute_ol_entropy(xt: Array, U: Array):
+        X = unroll(xt, U)
+        fx, fu = traj_linerize(X[:-1], U)
+
+        ## calculate logdet of the recursions
+        logdet_Y, _ = compute_entropy(fx, fu)
+
+        horizon = fx.shape[0]
+        T = jnp.arange(1, horizon + 1)
+
+        ## normalize by time
+        ol = logdet_Y / (2 * jnp.flip(T) * dt)
+        return ol[0]
+    
+    return jax.jit(compute_ol_entropy)
+
+
 @jax.jit
 def compute_feedback(fx: Array, fu: Array):
 
