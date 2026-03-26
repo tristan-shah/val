@@ -13,10 +13,10 @@ from val.cem import CEM
 from val.cip import make_compute_cip
 
 if __name__ == '__main__':
-    seed = 1
+    seed = 4
     key = jax.random.PRNGKey(seed)
 
-    component = 'ol'
+    component = 'cip'
 
     dt = 0.05
     horizon = 150

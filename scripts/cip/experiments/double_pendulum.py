@@ -9,11 +9,11 @@ import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step
 from val.cem import CEM
-from val.cip import make_compute_cip, make_compute_ol_entropy, make_compute_cip_approximation
+from val.cip import make_compute_cip
 
 if __name__ == '__main__':
 
-    motivator = 'cip'
+    component = 'cip'
 
     seed = 0
     key = jax.random.PRNGKey(seed)
@@ -28,12 +28,13 @@ if __name__ == '__main__':
     rho = 0.9
 
     # name = f'DOUBLE_PENDULUM-gear=6.0-approximation-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
-    name = f'h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
+    # name = f'h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
 
-    if motivator == 'cip':
-        root = Path('results/DOUBLE_PENDULUM')
-    elif motivator == 'ol':
-        root = Path('results/DOUBLE_PENDULUM/OL_ENTROPY')
+    name = f'seed={seed}-gear=6.0-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
+    root = Path(f'results/DOUBLE_PENDULUM/{component}')
+    path = root / name
+    path.mkdir(parents = True, exist_ok = True)
+
 
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
@@ -42,10 +43,7 @@ if __name__ == '__main__':
     step = make_step(dyn)
     print(dyn.state_dim, dyn.control_dim)
 
-    if motivator == 'cip':
-        compute_cip = make_compute_cip(dyn)
-    elif motivator == 'ol':
-        compute_cip = make_compute_ol_entropy(dyn)
+    compute_cip = make_compute_cip(dyn, component)
 
     # compute_cip = make_compute_cip_approximation(dyn)
     ## vectorize over batches of trajectories
@@ -63,7 +61,6 @@ if __name__ == '__main__':
     
     ## initial state
     xt = jnp.zeros(dyn.state_dim)
-    # xt = xt.at[0].set(3.14)
 
     X = jnp.zeros((steps + 1, dyn.state_dim))
     X = X.at[0].set(xt)
