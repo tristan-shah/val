@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
@@ -21,14 +21,14 @@ if __name__ == '__main__':
     component = 'ol'
 
     dt = 0.01
-    horizon = 512
+    horizon = 200#512
     shots = 512
     steps = 1000
     iterations = 2
     elite_frac = 0.1
     smoothing = 0.1
     rho = 0.9
-    gear = 50
+    gear = 25
     
     root = Path(f'results/UNRESTRICTED_HOPPER/{component}')
     name = f'gear={gear}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
