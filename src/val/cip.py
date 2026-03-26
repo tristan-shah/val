@@ -52,7 +52,9 @@ def compute_entropy(fx: Array, fu: Array):
     _, (logdet_Y, logdet_W) = jax.lax.scan(scan_fn, init = init, xs = (fx, fu), reverse = True)
     return logdet_Y, logdet_W
 
-def make_compute_cip(dyn: Dynamics):
+def make_compute_cip(dyn: Dynamics, component: str = 'cip'):
+
+    assert component in ['cip', 'ol', 'cl']
 
     step = make_step(dyn)
     traj_linerize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
@@ -72,34 +74,16 @@ def make_compute_cip(dyn: Dynamics):
         ## normalize by time
         ol = logdet_Y / (2 * jnp.flip(T) * dt)
         cl = logdet_W / (2 * jnp.flip(T) * dt)
-        cip = ol - cl
-        return cip[0]
+        # cip = ol - cl
+        # return cip[0]
+        if component == 'cip':
+            return ol[0] - cl[0]
+        elif component == 'ol':
+            return ol[0]
+        elif component == 'cl':
+            return -cl[0]
     
     return jax.jit(compute_cip)
-
-
-def make_compute_ol_entropy(dyn: Dynamics):
-
-    step = make_step(dyn)
-    traj_linerize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
-    unroll = make_unroll(step)
-    dt = dyn.mjx_model.opt.timestep
-
-    def compute_ol_entropy(xt: Array, U: Array):
-        X = unroll(xt, U)
-        fx, fu = traj_linerize(X[:-1], U)
-
-        ## calculate logdet of the recursions
-        logdet_Y, _ = compute_entropy(fx, fu)
-
-        horizon = fx.shape[0]
-        T = jnp.arange(1, horizon + 1)
-
-        ## normalize by time
-        ol = logdet_Y / (2 * jnp.flip(T) * dt)
-        return ol[0]
-    
-    return jax.jit(compute_ol_entropy)
 
 
 @jax.jit

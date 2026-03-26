@@ -1,6 +1,7 @@
 # import os
 # os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 # os.environ['MUJOCO_GL'] = 'egl'
+from pathlib import Path
 
 import jax
 from jax import numpy as jnp
@@ -17,6 +18,8 @@ if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
 
+    component = 'ol'
+
     dt = 0.01
     horizon = 512
     shots = 512
@@ -25,9 +28,13 @@ if __name__ == '__main__':
     elite_frac = 0.1
     smoothing = 0.1
     rho = 0.9
-    gear = 25
+    gear = 100 #25
 
-    name = f'UNRESTRICTED_HOPPER-gear={gear}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
+    # name = f'UNRESTRICTED_HOPPER-gear={gear}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
+    name = f'gear={gear}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
+    root = Path(f'results/UNRESTRICTED_HOPPER/{component}')
+    path = root / name
+    path.mkdir(parents = True, exist_ok = True)
 
     ## initialize dynamics
     dyn = Dynamics('xml/unrestricted_hopper.xml', dt = 0.01)
@@ -38,7 +45,7 @@ if __name__ == '__main__':
     )
     
     step = make_step(dyn)
-    compute_cip = make_compute_cip(dyn)
+    compute_cip = make_compute_cip(dyn, component)
     ## vectorize over batches of trajectories
     batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
 
@@ -59,7 +66,7 @@ if __name__ == '__main__':
     # '''
     # test passive dynamics
     # '''
-    # xt = jnp.array([-0.84561067, -0.77951274, -8.43766739, -2.59336965, -1.63642628, 0.77351244, 1.20768491, -1.31422078, 3.59244821, 1.05036794, 0.25376109, -0.07993622])
+    # # xt = jnp.array([-0.84561067, -0.77951274, -8.43766739, -2.59336965, -1.63642628, 0.77351244, 1.20768491, -1.31422078, 3.59244821, 1.05036794, 0.25376109, -0.07993622])
     # from val import make_unroll
     # unroll = make_unroll(step)
     # # U = jnp.zeros((horizon, dyn.control_dim))
@@ -84,8 +91,8 @@ if __name__ == '__main__':
         X = X.at[t+1].set(xt)
         hist = hist.at[t].set(J)
 
-    jnp.save(name + '-hist.npy', hist)
-    jnp.save(name + '-traj.npy', X)
+    jnp.save(path / 'hist.npy', hist)
+    jnp.save(path / 'traj.npy', X)
 
     fig, ax = plt.subplots(1, 1)
     ax.set_xlabel('Time (s)')
@@ -93,7 +100,7 @@ if __name__ == '__main__':
     T = jnp.arange(0, steps)
     ax.plot(T * dt, hist)
     fig.tight_layout()
-    fig.savefig(name + '.png', dpi = 300)
+    fig.savefig(path / 'cip.png', dpi = 300)
     plt.show()
 
-    dyn.render(X, path = name + '.mp4', skip = 1, distance = 4)
+    dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 4)

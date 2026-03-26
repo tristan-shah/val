@@ -10,15 +10,16 @@ import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step, make_unroll
 from val.cem import CEM
-from val.cip import make_compute_cip, make_compute_ol_entropy
-# from val.cip import make_compute_cip_approximation
+from val.cip import make_compute_cip
 
 if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
 
+    component = 'ol'
+
     dt = 0.05
-    horizon = 150
+    horizon = 200
     shots = 512
     steps = 600
     iterations = 1
@@ -27,7 +28,7 @@ if __name__ == '__main__':
     rho = 0.9
     
     name = f'h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
-    root = Path('results/SINGLE_PENDULUM/OL_ENTROPY')
+    root = Path(f'results/SINGLE_PENDULUM/{component}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 
@@ -36,9 +37,7 @@ if __name__ == '__main__':
     step = make_step(dyn)
     unroll = make_unroll(step)
 
-    # compute_cip = make_compute_cip(dyn)
-    compute_cip = make_compute_ol_entropy(dyn)
-    # compute_cip = make_compute_cip_approximation(dyn)
+    compute_cip = make_compute_cip(dyn, component)
     ## vectorize over batches of trajectories
     batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
 
