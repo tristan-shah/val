@@ -13,7 +13,7 @@ from val.cip import make_compute_cip
 
 if __name__ == '__main__':
 
-    component = 'cip'
+    component = 'ol'
 
     seed = 0
     key = jax.random.PRNGKey(seed)
@@ -22,7 +22,7 @@ if __name__ == '__main__':
     horizon = 512
     shots = 512
     steps = 1200
-    iterations = 10
+    iterations = 3
     elite_frac = 0.1
     smoothing = 0.1
     rho = 0.9

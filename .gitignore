@@ -1,3 +1,5 @@
+machinefile.*
+*.out
 *.npy
 *.png
 *.mp4
