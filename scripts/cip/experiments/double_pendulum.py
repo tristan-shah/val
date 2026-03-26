@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from val import Dynamics, make_step
 from val.cem import CEM
 from val.cip import make_compute_cip
+from val.info import make_compute_rate
 
 if __name__ == '__main__':
 
@@ -22,7 +23,7 @@ if __name__ == '__main__':
     horizon = 512
     shots = 512
     steps = 1200
-    iterations = 3
+    iterations = 10
     elite_frac = 0.1
     smoothing = 0.1
     rho = 0.9
@@ -31,11 +32,8 @@ if __name__ == '__main__':
     # name = f'h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
 
     name = f'seed={seed}-gear=6.0-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
-    root = Path(f'results/DOUBLE_PENDULUM/{component}')
-    path = root / name
-    path.mkdir(parents = True, exist_ok = True)
-
-
+    # root = Path(f'results/DOUBLE_PENDULUM/{component}')
+    root = Path(f'results/DOUBLE_PENDULUM/exponential_domain/{component}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 
@@ -43,11 +41,11 @@ if __name__ == '__main__':
     step = make_step(dyn)
     print(dyn.state_dim, dyn.control_dim)
 
-    compute_cip = make_compute_cip(dyn, component)
-
-    # compute_cip = make_compute_cip_approximation(dyn)
-    ## vectorize over batches of trajectories
-    batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
+    # compute_cip = make_compute_cip(dyn, component)
+    # ## vectorize over batches of trajectories
+    # batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
+    
+    batch_compute_cip = make_compute_rate(dyn, component = component)
 
     mpc = CEM(
         dyn,

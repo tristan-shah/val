@@ -18,11 +18,10 @@ if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
 
-    component = 'cip'
+    component = 'ol'
 
     dt = 0.01
     horizon = 400 ## works
-    # horizon = 200 #150 #400
     shots = 512
     steps = 1200
 
@@ -44,8 +43,12 @@ if __name__ == '__main__':
     step = make_step(dyn)
     unroll = make_unroll(step)
 
-    compute_cip = make_compute_cip(dyn)
-    batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
+    # compute_cip = make_compute_cip(dyn)
+    # batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
+
+
+    batch_compute_cip = make_compute_rate(dyn, component = component)
+
 
     ## initialize agent
     mpc = CEM(

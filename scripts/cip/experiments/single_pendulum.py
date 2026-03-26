@@ -1,6 +1,6 @@
-# import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-# os.environ['MUJOCO_GL'] = 'egl'
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
 import jax
@@ -17,7 +17,7 @@ if __name__ == '__main__':
     seed = 3
     key = jax.random.PRNGKey(seed)
 
-    component = 'ol'
+    component = 'cip'
 
     dt = 0.05
     horizon = 400
