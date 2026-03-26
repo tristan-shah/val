@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from val import Dynamics, make_step, make_unroll
 from val.cem import CEM
 from val.cip import make_compute_cip
+from val.info import make_compute_rate
 
 if __name__ == '__main__':
     seed = 4
@@ -28,7 +29,8 @@ if __name__ == '__main__':
     rho = 0.9
     
     name = f'seed={seed}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
-    root = Path(f'results/SINGLE_PENDULUM/{component}')
+    # root = Path(f'results/SINGLE_PENDULUM/{component}')
+    root = Path(f'results/SINGLE_PENDULUM/exponential_domain/{component}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 
@@ -37,9 +39,11 @@ if __name__ == '__main__':
     step = make_step(dyn)
     unroll = make_unroll(step)
 
-    compute_cip = make_compute_cip(dyn, component)
-    ## vectorize over batches of trajectories
-    batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
+    # compute_cip = make_compute_cip(dyn, component)
+    # ## vectorize over batches of trajectories
+    # batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
+
+    batch_compute_cip = make_compute_rate(dyn, component = component)
 
     ## initialize agent
     mpc = CEM(

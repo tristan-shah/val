@@ -10,12 +10,15 @@ import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step, make_unroll
 from val.cem import CEM
-from val.cip import make_compute_cip, make_compute_ol_entropy
+from val.cip import make_compute_cip
+from val.info import make_compute_rate
 
 
 if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
+
+    component = 'cip'
 
     dt = 0.01
     horizon = 400 ## works
@@ -30,10 +33,9 @@ if __name__ == '__main__':
     rho = 0.9
     gamma = 1.0
 
-    # name = f'CART_POLE-h={horizon}-gamma={gamma}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-alpha={alpha}-dt={dt}'
-
     name = f'h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
-    root = Path('results/CART_POLE/OL_ENTROPY')
+    # root = Path(f'results/CART_POLE/{component}')
+    root = Path(f'results/CART_POLE/exponential_domain/{component}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 
@@ -42,8 +44,7 @@ if __name__ == '__main__':
     step = make_step(dyn)
     unroll = make_unroll(step)
 
-    # compute_cip = make_compute_cip(dyn)
-    compute_cip = make_compute_ol_entropy(dyn)
+    compute_cip = make_compute_cip(dyn)
     batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
 
     ## initialize agent

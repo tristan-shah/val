@@ -35,7 +35,8 @@ def compute_volume(fx: Array, fu: Array, alpha: float, gamma: float):
     _, (Y, V, W, K) = jax.lax.scan(scan_fn, init = (Q, Q, Q), xs = (fx, fu), reverse = True)
     return Y, V, W, K
 
-def make_compute_rate(dyn: Dynamics, alpha: float = 1.0, gamma: float = 1.0):
+def make_compute_rate(dyn: Dynamics, alpha: float = 1.0, gamma: float = 1.0, component: str = 'cip'):
+    assert component in ['cip', 'ol', 'cl']
 
     ## helper functions
     step = make_step(dyn)
@@ -60,13 +61,19 @@ def make_compute_rate(dyn: Dynamics, alpha: float = 1.0, gamma: float = 1.0):
         T = jnp.arange(1, horizon + 1)
 
         ## compute entropy
-        ol_entropy = jnp.linalg.slogdet(Y).logabsdet / (2 * jnp.flip(T) * dt) ## open loop
-        cl_entropy = jnp.linalg.slogdet(W).logabsdet / (2 * jnp.flip(T) * dt) ## closed loop
-        ## convert entropy into information
-        information = ol_entropy - cl_entropy
+        ol = jnp.linalg.slogdet(Y).logabsdet / (2 * jnp.flip(T) * dt) ## open loop
+        cl = jnp.linalg.slogdet(W).logabsdet / (2 * jnp.flip(T) * dt) ## closed loop
+        # ## convert entropy into information
+        # information = ol_entropy - cl_entropy
         
-        rate = information
+        # # rate = information
+        # rate = ol_entropy
 
-        return rate[:, 0]
+        if component == 'cip':
+            return ol[0] - cl[0]
+        elif component == 'ol':
+            return ol[0]
+        elif component == 'cl':
+            return -cl[0]
     
     return jax.jit(compute_rate)
