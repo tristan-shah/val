@@ -17,7 +17,7 @@ if __name__ == '__main__':
     # root = 'results/SINGLE_PENDULUM/exponential_domain'
 
     ## task cartpole
-    root = 'results/CART_POLE/exponential_domain'
+    root = 'results/CIP/CART_POLE/exponential_domain'
     horizon = 400
     dt = 0.01
 
