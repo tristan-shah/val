@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ['MUJOCO_GL'] = 'egl'
@@ -15,13 +16,19 @@ from val.info import make_compute_rate
 
 
 if __name__ == '__main__':
-    seed = 0
-    key = jax.random.PRNGKey(seed)
 
-    component = 'ol'
+    parser = ArgumentParser()
+    parser.add_argument('--seed', type = int)
+    parser.add_argument('--component', type = str)
+    parser.add_argument('--horizon', type = int, default = 400)
+    args = parser.parse_args()
+
+    seed = args.seed
+    key = jax.random.PRNGKey(seed)
+    component = args.component #'ol'
 
     dt = 0.01
-    horizon = 400 ## works
+    horizon = args.horizon
     shots = 512
     steps = 1200
 
@@ -32,7 +39,7 @@ if __name__ == '__main__':
     rho = 0.9
     gamma = 1.0
 
-    name = f'h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
+    name = f'seed={seed}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
     # root = Path(f'results/CART_POLE/{component}')
     root = Path(f'results/CART_POLE/exponential_domain/{component}')
     path = root / name
@@ -45,15 +52,12 @@ if __name__ == '__main__':
 
     # compute_cip = make_compute_cip(dyn)
     # batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
-
-
     batch_compute_cip = make_compute_rate(dyn, component = component)
 
 
     ## initialize agent
     mpc = CEM(
         dyn,
-        # make_compute_rate(dyn, alpha, gamma),
         batch_compute_cip,
         shots, 
         horizon, 
@@ -68,16 +72,16 @@ if __name__ == '__main__':
     X = jnp.zeros((steps + 1, dyn.state_dim))
     X = X.at[0].set(xt)
 
-    hist = jnp.zeros(steps)
+    hist = jnp.zeros((steps, 3))
 
     for t in range(steps):
         key, subkey = jax.random.split(key)
-        ut, J = mpc(xt, subkey)
+        ut, J, info = mpc(xt, subkey)
         xt = step(xt, ut)
         print(t, xt, ut, J)
 
         X = X.at[t+1].set(xt)
-        hist = hist.at[t].set(J)
+        hist = hist.at[t].set(jnp.array([info['cip'], info['ol'], info['cl']]))
 
     jnp.save(path / 'hist.npy', hist)
     jnp.save(path / 'traj.npy', X)
@@ -86,7 +90,10 @@ if __name__ == '__main__':
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('nats / s')
     T = jnp.arange(0, steps)
-    ax.plot(T * dt, hist)
+    ax.plot(T * dt, hist[:, 0], label = 'CIP')
+    ax.plot(T * dt, hist[:, 1], label = 'OL')
+    ax.plot(T * dt, hist[:, 2], label = 'CL')
+    ax.legend()
     fig.tight_layout()
     fig.savefig(path / 'cip.png', dpi = 300)
     plt.show()

@@ -2,42 +2,47 @@ from pathlib import Path
 from jax import numpy as jnp
 import matplotlib.pyplot as plt
 
-def load_average_history(base_path, method, num_seeds):
+def load_average_history(base_path, method, num_seeds, horizon, dt):
     '''Load history arrays for multiple seeds and return stacked array.'''
     histories = []
     for seed in range(num_seeds):
-        path = Path(f'{base_path}/{method}/seed={seed}-h=150-shots=512-iter=1-elite=0.1-smooth=0.1-rho=0.9-dt=0.05')
+        path = Path(f'{base_path}/{method}/seed={seed}-h={horizon}-shots=512-iter=1-elite=0.1-smooth=0.1-rho=0.9-dt={dt}')
         hist = jnp.load(path / 'hist.npy')
         histories.append(hist)
     return jnp.stack(histories).mean(axis = 0)  # shape: (num_seeds, time_steps, features)
 
 if __name__ == '__main__':
 
-    root = 'results/SINGLE_PENDULUM/exponential_domain'
+    num_seeds = 6
+    # root = 'results/SINGLE_PENDULUM/exponential_domain'
 
-    # cip_path = Path('results/SINGLE_PENDULUM/exponential_domain/cip/seed=0-h=150-shots=512-iter=1-elite=0.1-smooth=0.1-rho=0.9-dt=0.05')
-    # cip_hist = jnp.load(cip_path / 'hist.npy')
-    cip_hist = load_average_history(root, 'cip', 2)
-    ol_hist = load_average_history(root, 'ol', 2)
+    ## task cartpole
+    root = 'results/CART_POLE/exponential_domain'
+    horizon = 400
+    dt = 0.01
 
-
-    # ol_path = Path('results/SINGLE_PENDULUM/exponential_domain/ol/seed=0-h=150-shots=512-iter=1-elite=0.1-smooth=0.1-rho=0.9-dt=0.05')
-    # ol_hist = jnp.load(ol_path / 'hist.npy')
-
-    # cl_path = Path('results/SINGLE_PENDULUM/exponential_domain/cl/seed=0-h=150-shots=512-iter=1-elite=0.1-smooth=0.1-rho=0.9-dt=0.05')
-    # cl_hist = jnp.load(cl_path / 'hist.npy')
-
-    # fig, ax = plt.subplots(1, 1)
-    # ax.plot(cip_hist[:, 0], label = 'CIP')
-    # ax.plot(ol_hist[:, 0], label = 'OL')
-    # ax.plot(cl_hist[:, 0], label = 'OL')
-    # ax.legend()
-    # fig.tight_layout()
-    # fig.savefig('hist.png', dpi = 300)
+    cip_hist = load_average_history(root, 'cip', num_seeds, horizon, dt)
+    ol_hist = load_average_history(root, 'ol', num_seeds, horizon, dt)
 
     print(cip_hist.mean(axis = 0))
     print(ol_hist.mean(axis = 0))
+
+
     # print(cl_hist.mean(axis = 0))
+
+    # hist = jnp.load('/mnt/CICI/home/trisshah/val/results/CART_POLE/exponential_domain/cip/seed=0-h=400-shots=512-iter=1-elite=0.1-smooth=0.1-rho=0.9-dt=0.01/hist.npy')
+    # print(hist)
+
+    # fig, ax = plt.subplots(1, 1)
+    # ax.plot(hist[:, 2])
+    # fig.tight_layout()
+    # fig.savefig('cl.png', dpi = 300)
+    
+
+
+
+
+
 
 
 

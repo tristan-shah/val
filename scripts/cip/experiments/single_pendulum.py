@@ -1,5 +1,6 @@
+from argparse import ArgumentParser
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
@@ -14,13 +15,20 @@ from val.cip import make_compute_cip
 from val.info import make_compute_rate
 
 if __name__ == '__main__':
-    seed = 1
+    parser = ArgumentParser()
+    parser.add_argument('--seed', type = int)
+    parser.add_argument('--component', type = str)
+    parser.add_argument('--horizon', type = int, default = 150)
+    args = parser.parse_args()
+
+
+    seed = args.seed
     key = jax.random.PRNGKey(seed)
 
-    component = 'ol'
+    component = args.component #'ol'
 
     dt = 0.05
-    horizon = 150
+    horizon = args.horizon
     shots = 512
     steps = 600
     iterations = 1
@@ -59,49 +67,43 @@ if __name__ == '__main__':
     ## get initial state
     xt = jnp.zeros(dyn.state_dim)
 
-    '''
-    Plot CIP
-    '''
-    # xt = xt.at[0].set(3.14)
 
-    # U = jnp.zeros((horizon, dyn.control_dim))
-    # X = unroll(xt, U)
+    print(xt)
 
-    # linearize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
-    # fx, fu = linearize(X[:-1], U)
-    # compute_entropy_approximation(fx, fu)
 
-    '''
-    Run MPC
-    '''
-    X = jnp.zeros((steps + 1, dyn.state_dim))
-    X = X.at[0].set(xt)
 
-    hist = jnp.zeros((steps, 3))
 
-    for t in range(steps):
-        key, subkey = jax.random.split(key)
-        ut, J, info = mpc(xt, subkey)
+    # '''
+    # Run MPC
+    # '''
+    # X = jnp.zeros((steps + 1, dyn.state_dim))
+    # X = X.at[0].set(xt)
 
-        xt = step(xt, ut)
-        print(t, xt, ut, J)
+    # hist = jnp.zeros((steps, 3))
 
-        X = X.at[t+1].set(xt)
-        # hist = hist.at[t].set(J)
-        hist = hist.at[t].set(jnp.array([info['cip'], info['ol'], info['cl']]))
+    # for t in range(steps):
+    #     key, subkey = jax.random.split(key)
+    #     ut, J, info = mpc(xt, subkey)
 
-    jnp.save(path / 'hist.npy', hist)
-    jnp.save(path / 'traj.npy', X)
+    #     xt = step(xt, ut)
+    #     print(t, xt, ut, J)
 
-    fig, ax = plt.subplots(1, 1)
-    ax.set_xlabel('Time (s)')
-    ax.set_ylabel('nats / s')
-    T = jnp.arange(0, steps)
-    ax.plot(T * dt, hist[:, 0], label = 'CIP')
-    ax.plot(T * dt, hist[:, 1], label = 'OL')
-    ax.plot(T * dt, hist[:, 2], label = 'CL')
-    fig.tight_layout()
-    fig.savefig(path / 'cip.png', dpi = 300)
-    plt.show()
+    #     X = X.at[t+1].set(xt)
+    #     hist = hist.at[t].set(jnp.array([info['cip'], info['ol'], info['cl']]))
 
-    dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 4)
+    # jnp.save(path / 'hist.npy', hist)
+    # jnp.save(path / 'traj.npy', X)
+
+    # fig, ax = plt.subplots(1, 1)
+    # ax.set_xlabel('Time (s)')
+    # ax.set_ylabel('nats / s')
+    # T = jnp.arange(0, steps)
+    # ax.plot(T * dt, hist[:, 0], label = 'CIP')
+    # ax.plot(T * dt, hist[:, 1], label = 'OL')
+    # ax.plot(T * dt, hist[:, 2], label = 'CL')
+    # ax.legend()
+    # fig.tight_layout()
+    # fig.savefig(path / 'cip.png', dpi = 300)
+    # plt.show()
+
+    # dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 4)
