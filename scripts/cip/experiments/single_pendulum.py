@@ -14,13 +14,13 @@ from val.cip import make_compute_cip
 from val.info import make_compute_rate
 
 if __name__ == '__main__':
-    seed = 3
+    seed = 1
     key = jax.random.PRNGKey(seed)
 
-    component = 'cip'
+    component = 'ol'
 
     dt = 0.05
-    horizon = 400
+    horizon = 150
     shots = 512
     steps = 600
     iterations = 1
@@ -77,17 +77,18 @@ if __name__ == '__main__':
     X = jnp.zeros((steps + 1, dyn.state_dim))
     X = X.at[0].set(xt)
 
-    hist = jnp.zeros(steps)
+    hist = jnp.zeros((steps, 3))
 
     for t in range(steps):
         key, subkey = jax.random.split(key)
-        ut, J = mpc(xt, subkey)
+        ut, J, info = mpc(xt, subkey)
 
         xt = step(xt, ut)
         print(t, xt, ut, J)
 
         X = X.at[t+1].set(xt)
-        hist = hist.at[t].set(J)
+        # hist = hist.at[t].set(J)
+        hist = hist.at[t].set(jnp.array([info['cip'], info['ol'], info['cl']]))
 
     jnp.save(path / 'hist.npy', hist)
     jnp.save(path / 'traj.npy', X)
@@ -96,7 +97,9 @@ if __name__ == '__main__':
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('nats / s')
     T = jnp.arange(0, steps)
-    ax.plot(T * dt, hist)
+    ax.plot(T * dt, hist[:, 0], label = 'CIP')
+    ax.plot(T * dt, hist[:, 1], label = 'OL')
+    ax.plot(T * dt, hist[:, 2], label = 'CL')
     fig.tight_layout()
     fig.savefig(path / 'cip.png', dpi = 300)
     plt.show()

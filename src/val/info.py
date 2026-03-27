@@ -69,11 +69,17 @@ def make_compute_rate(dyn: Dynamics, alpha: float = 1.0, gamma: float = 1.0, com
         # # rate = information
         # rate = ol_entropy
 
+        ol = ol[:, 0]
+        cl = cl[:, 0]
+        cip = ol - cl
+
+        info = {'cip': cip, 'ol': ol, 'cl': cl}
+
         if component == 'cip':
-            return ol[:, 0] - cl[:, 0]
+            return cip, info
         elif component == 'ol':
-            return ol[:, 0]
+            return ol, info
         elif component == 'cl':
-            return -cl[:, 0]
+            return -cl, info
     
     return jax.jit(compute_rate)
