@@ -18,8 +18,8 @@ from val.info import make_compute_rate
 if __name__ == '__main__':
 
     parser = ArgumentParser()
-    parser.add_argument('--seed', type = int)
-    parser.add_argument('--component', type = str)
+    parser.add_argument('--seed', type = int, default = 0)
+    parser.add_argument('--component', type = str, default = 'ol')
     parser.add_argument('--horizon', type = int, default = 400)
     args = parser.parse_args()
 
@@ -76,7 +76,23 @@ if __name__ == '__main__':
 
     for t in range(steps):
         key, subkey = jax.random.split(key)
-        ut, J, info = mpc(xt, subkey)
+        # ut, J, info = mpc(xt, subkey)
+
+        ut, J, info, U = mpc(xt, subkey)
+
+        fig, ax = plt.subplots(1, 1)
+        ax.plot(U[:, :, 0].T, alpha = 0.1, color = 'blue')
+        ax.set_xlabel('Planning Horizon')
+        ax.set_ylabel('Control')
+        ax.set_ylim(-1.1, 1.1)
+        fig.tight_layout()
+        fig.savefig(f'controls_{t}.png', dpi = 300)
+        plt.close(fig)
+
+
+
+
+
         xt = step(xt, ut)
         print(t, xt, ut, J)
 

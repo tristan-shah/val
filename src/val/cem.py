@@ -111,4 +111,5 @@ class CEM:
             'cl': info['cl'][elite_idx].mean()
             }
 
-        return ut, J[elite_idx].mean(), info
+        # return ut, J[elite_idx].mean(), info
+        return ut, J[elite_idx].mean(), info, U_batch[elite_idx]
