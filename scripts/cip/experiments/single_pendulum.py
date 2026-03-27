@@ -30,7 +30,7 @@ if __name__ == '__main__':
     horizon = args.horizon
     shots = 512
     steps = 600
-    iterations = 1
+    iterations = 5 #1
     elite_frac = 0.1
     smoothing = 0.1
     rho = 0.9

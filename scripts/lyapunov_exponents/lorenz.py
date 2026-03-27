@@ -184,4 +184,6 @@ if __name__ == '__main__':
     fig.savefig('Lorenz.png', dpi = 300)
     plt.show()
 
+    print(jnp.flip(hist) - LE)
+
     # plot_lorenz_3d(X)
