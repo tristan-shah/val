@@ -13,5 +13,6 @@ conda activate val
 export PYTHONUNBUFFERED=1  # Add this
 
 # Run your Python script
+# python scripts/cip/experiments/single_pendulum.py --seed 5 --component cip --horizon 150
 # python scripts/cip/experiments/cart_pole.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 400
-python scripts/cip/experiments/single_pendulum.py --seed 5 --component cip --horizon 150
+python scripts/cip/experiments/double-pendulum.py --seed 0 --component cip --horizon 512

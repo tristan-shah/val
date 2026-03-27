@@ -28,7 +28,7 @@ if __name__ == '__main__':
     dt = 0.01
     horizon = args.horizon
     shots = 512
-    steps = 1200
+    steps = 3000 #1200
 
     iterations = 10
     elite_frac = 0.1
