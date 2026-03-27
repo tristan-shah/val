@@ -90,14 +90,14 @@ if __name__ == '__main__':
         ut, J, info, U = mpc(xt, subkey)
 
 
-        fig, ax = plt.subplots(1, 1)
-        ax.plot(U[:, :, 0].T, alpha = 0.1, color = 'blue')
-        ax.set_xlabel('Planning Horizon')
-        ax.set_ylabel('Control')
-        ax.set_ylim(-1.1, 1.1)
-        fig.tight_layout()
-        fig.savefig(f'controls_{t}.png', dpi = 300)
-        plt.close(fig)
+        # fig, ax = plt.subplots(1, 1)
+        # ax.plot(U[:, :, 0].T, alpha = 0.1, color = 'blue')
+        # ax.set_xlabel('Planning Horizon')
+        # ax.set_ylabel('Control')
+        # ax.set_ylim(-1.1, 1.1)
+        # fig.tight_layout()
+        # fig.savefig(f'controls_{t}.png', dpi = 300)
+        # plt.close(fig)
 
 
 
