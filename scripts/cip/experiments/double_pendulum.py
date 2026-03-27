@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ['MUJOCO_GL'] = 'egl'
@@ -14,22 +15,25 @@ from val.info import make_compute_rate
 
 if __name__ == '__main__':
 
-    component = 'ol'
+    parser = ArgumentParser()
+    parser.add_argument('--seed', type = int, default = 0)
+    parser.add_argument('--component', type = str, default = 'ol')
+    parser.add_argument('--horizon', type = int, default = 400)
+    args = parser.parse_args()
 
-    seed = 0
+    seed = args.seed
     key = jax.random.PRNGKey(seed)
+    component = args.component
 
     dt = 0.01
-    horizon = 512
+    horizon = args.horizon
     shots = 512
     steps = 1200
+
     iterations = 10
     elite_frac = 0.1
     smoothing = 0.1
     rho = 0.9
-
-    # name = f'DOUBLE_PENDULUM-gear=6.0-approximation-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
-    # name = f'h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
 
     name = f'seed={seed}-gear=6.0-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
     # root = Path(f'results/DOUBLE_PENDULUM/{component}')
@@ -42,9 +46,7 @@ if __name__ == '__main__':
     print(dyn.state_dim, dyn.control_dim)
 
     # compute_cip = make_compute_cip(dyn, component)
-    # ## vectorize over batches of trajectories
     # batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
-    
     batch_compute_cip = make_compute_rate(dyn, component = component)
 
     mpc = CEM(
@@ -63,16 +65,18 @@ if __name__ == '__main__':
     X = jnp.zeros((steps + 1, dyn.state_dim))
     X = X.at[0].set(xt)
 
-    hist = jnp.zeros(steps)
+    hist = jnp.zeros((steps, 3))
 
     for t in range(steps):
         key, subkey = jax.random.split(key)
-        ut, J = mpc(xt, subkey)
+        ut, J, info, U = mpc(xt, subkey)
+
         xt = step(xt, ut)
         print(t, xt, ut, J)
 
         X = X.at[t+1].set(xt)
-        hist = hist.at[t].set(J)
+        # hist = hist.at[t].set(J)
+        hist = hist.at[t].set(jnp.array([info['cip'], info['ol'], info['cl']]))
 
     jnp.save(path / 'hist.npy', hist)
     jnp.save(path / 'traj.npy', X)
@@ -81,7 +85,10 @@ if __name__ == '__main__':
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('nats / s')
     T = jnp.arange(0, steps)
-    ax.plot(T * dt, hist)
+    ax.plot(T * dt, hist[:, 0], label = 'CIP')
+    ax.plot(T * dt, hist[:, 1], label = 'OL')
+    ax.plot(T * dt, hist[:, 2], label = 'CL')
+    ax.legend()
     fig.tight_layout()
     fig.savefig(path / 'cip.png', dpi = 300)
     plt.show()
