@@ -184,6 +184,7 @@ if __name__ == '__main__':
     fig.savefig('Lorenz.png', dpi = 300)
     plt.show()
 
-    print(jnp.flip(hist) - LE)
+    error = jnp.flip(hist) - LE.clip(min = 0.0).sum(axis = 1)
 
+    print(jnp.mean(jnp.square(error[25000:])))
     # plot_lorenz_3d(X)
