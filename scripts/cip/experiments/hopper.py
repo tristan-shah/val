@@ -1,6 +1,6 @@
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-os.environ['MUJOCO_GL'] = 'egl'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
 import jax
@@ -18,25 +18,25 @@ if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
 
+    integrator = 'rk4'
     component = 'ol'
-
     dt = 0.01
-    horizon = 200#512
+    horizon = 512
     shots = 512
     steps = 1000
-    iterations = 10
+    iterations = 1
     elite_frac = 0.1
     smoothing = 0.1
     rho = 0.9
     gear = 25
     
-    root = Path(f'results/UNRESTRICTED_HOPPER/{component}')
-    name = f'gear={gear}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
+    root = Path(f'results/CIP/UNRESTRICTED_HOPPER/{component}')
+    name = f'integrator={integrator}-gear={gear}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 
     ## initialize dynamics
-    dyn = Dynamics('xml/unrestricted_hopper.xml', dt = dt)
+    dyn = Dynamics('xml/unrestricted_hopper.xml', dt = dt, integrator = integrator)
 
     ## override default gear strength
     dyn.mjx_model = dyn.mjx_model.replace(
@@ -65,15 +65,39 @@ if __name__ == '__main__':
     # '''
     # test passive dynamics
     # '''
-    # # xt = jnp.array([-0.84561067, -0.77951274, -8.43766739, -2.59336965, -1.63642628, 0.77351244, 1.20768491, -1.31422078, 3.59244821, 1.05036794, 0.25376109, -0.07993622])
-    # # xt = jnp.array([-0.2484596,  -0.84704019,  2.33145065,  1.4519735,   2.6143526,  -0.6855177, -0.28885332,  1.06538783, -0.53327147,  0.62740361, -8.09880817, 12.10183249])
-    # xt = jnp.array([  0.02113042,  -0.77214607,   2.30226937,   0.86600116,   2.22113746, -0.79031476,  -1.01808144,  -2.02670686, -14.58858985, -17.40379306, 5.77851456,  -0.40519211])
     # from val import make_unroll
     # unroll = make_unroll(step)
-    # # U = jnp.zeros((horizon, dyn.control_dim))
-    # U = jax.random.uniform(key, (horizon, dyn.control_dim)) * 2.0 - 1.0
+    # traj_linerize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
+    # U = jnp.zeros((horizon, dyn.control_dim))
+    # # U = jax.random.uniform(key, (horizon, dyn.control_dim)) * 2.0 - 1.0
     # X = unroll(xt, U)
-    # dyn.render(X, path = 'hopper.mp4', skip = 1)
+
+    # fx, fu = traj_linerize(X[:-1], U)
+    
+    # horizon, dx, dx = fx.shape
+
+    # Q = jnp.eye(dx)
+    # Y_inv_t = Q.copy()
+
+    # reward = jnp.zeros(horizon)
+
+    # for t in reversed(range(horizon)):
+    #     # r = jnp.linalg.slogdet(Y_inv_t + fx[t] @ fx[t].T).logabsdet
+    #     r = jnp.linalg.slogdet(Q + fx[t] @ fx[t].T).logabsdet
+    #     Y_inv_t = Q - fx[t].T @ jnp.linalg.inv(Y_inv_t + fx[t] @ fx[t].T) @ fx[t]
+    #     print(r)
+
+    #     reward = reward.at[t].set(r)
+        
+    # fig, ax = plt.subplots(1, 1)
+    # ax.plot(reward)
+    # ax.set_title('Reward During Backwards Recursion')
+    # ax.set_ylabel('Instantanious Reward')
+    # ax.set_xlabel('Timestep (s)')
+    # fig.savefig(f'{integrator}_hopper_reward_{dt}.png', dpi = 300)
+    # plt.show()
+
+    # dyn.render(X, path = 'hopper.mp4', skip = 1, distance = 4)
 
     '''
     run mpc

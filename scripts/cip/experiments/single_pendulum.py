@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-os.environ['MUJOCO_GL'] = 'egl'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
 import jax
@@ -67,63 +67,93 @@ if __name__ == '__main__':
     xt = jnp.zeros(dyn.state_dim)
 
 
+    horizon = 600
+    xt = xt.at[0].set(3.14)
+    unroll = make_unroll(step)
+    traj_linerize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
+    U = jnp.zeros((horizon, dyn.control_dim))
+    X = unroll(xt, U)
 
-    # key, subkey = jax.random.split(key)
-    # ut, J, info, U = mpc(xt, subkey)
-    # print(U)
+    fx, fu = traj_linerize(X[:-1], U)
+    
+    horizon, dx, dx = fx.shape
 
+    Q = jnp.eye(dx)
+    Y_inv_t = Q.copy()
 
+    reward = jnp.zeros(horizon)
 
+    for t in reversed(range(horizon)):
+        r = jnp.linalg.slogdet(Y_inv_t + fx[t] @ fx[t].T + Q * 1e-3).logabsdet
+        Y_inv_t = Q - fx[t].T @ jnp.linalg.inv(Y_inv_t + fx[t] @ fx[t].T) @ fx[t]
+        print(r)
 
-
-    '''
-    Run MPC
-    '''
-    X = jnp.zeros((steps + 1, dyn.state_dim))
-    X = X.at[0].set(xt)
-
-    hist = jnp.zeros((steps, 3))
-    controls = jnp.zeros((steps, dyn.control_dim))
-
-    for t in range(steps):
-        key, subkey = jax.random.split(key)
-        ut, J, info, U = mpc(xt, subkey)
-
-
-        # fig, ax = plt.subplots(1, 1)
-        # ax.plot(U[:, :, 0].T, alpha = 0.1, color = 'blue')
-        # ax.set_xlabel('Planning Horizon')
-        # ax.set_ylabel('Control')
-        # ax.set_ylim(-1.1, 1.1)
-        # fig.tight_layout()
-        # fig.savefig(f'controls_{t}.png', dpi = 300)
-        # plt.close(fig)
-
-
-
-
-
-        xt = step(xt, ut)
-        print(t, xt, ut, J)
-
-        controls = controls.at[t].set(ut)
-        X = X.at[t+1].set(xt)
-        hist = hist.at[t].set(jnp.array([info['cip'], info['ol'], info['cl']]))
-
-    jnp.save(path / 'hist.npy', hist)
-    jnp.save(path / 'traj.npy', X)
-    jnp.save(path / 'U.npy', controls)
-
+        reward = reward.at[t].set(r)
+        
     fig, ax = plt.subplots(1, 1)
-    ax.set_xlabel('Time (s)')
-    ax.set_ylabel('nats / s')
-    T = jnp.arange(0, steps)
-    ax.plot(T * dt, hist[:, 0], label = 'CIP')
-    ax.plot(T * dt, hist[:, 1], label = 'OL')
-    ax.plot(T * dt, hist[:, 2], label = 'CL')
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(path / 'cip.png', dpi = 300)
+    ax.plot(reward)
+    ax.set_title('Reward During Backwards Recursion')
+    ax.set_ylabel('Instantanious Reward')
+    ax.set_xlabel('Timestep (s)')
+    fig.savefig('single_pendulum_reward.png', dpi = 300)
     plt.show()
 
-    dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 4)
+    dyn.render(X, path = 'vid.mp4', skip = 1, distance = 4)
+
+
+
+
+
+
+
+    # '''
+    # Run MPC
+    # '''
+    # X = jnp.zeros((steps + 1, dyn.state_dim))
+    # X = X.at[0].set(xt)
+
+    # hist = jnp.zeros((steps, 3))
+    # controls = jnp.zeros((steps, dyn.control_dim))
+
+    # for t in range(steps):
+    #     key, subkey = jax.random.split(key)
+    #     ut, J, info, U = mpc(xt, subkey)
+
+
+    #     # fig, ax = plt.subplots(1, 1)
+    #     # ax.plot(U[:, :, 0].T, alpha = 0.1, color = 'blue')
+    #     # ax.set_xlabel('Planning Horizon')
+    #     # ax.set_ylabel('Control')
+    #     # ax.set_ylim(-1.1, 1.1)
+    #     # fig.tight_layout()
+    #     # fig.savefig(f'controls_{t}.png', dpi = 300)
+    #     # plt.close(fig)
+
+
+
+
+
+    #     xt = step(xt, ut)
+    #     print(t, xt, ut, J)
+
+    #     controls = controls.at[t].set(ut)
+    #     X = X.at[t+1].set(xt)
+    #     hist = hist.at[t].set(jnp.array([info['cip'], info['ol'], info['cl']]))
+
+    # jnp.save(path / 'hist.npy', hist)
+    # jnp.save(path / 'traj.npy', X)
+    # jnp.save(path / 'U.npy', controls)
+
+    # fig, ax = plt.subplots(1, 1)
+    # ax.set_xlabel('Time (s)')
+    # ax.set_ylabel('nats / s')
+    # T = jnp.arange(0, steps)
+    # ax.plot(T * dt, hist[:, 0], label = 'CIP')
+    # ax.plot(T * dt, hist[:, 1], label = 'OL')
+    # ax.plot(T * dt, hist[:, 2], label = 'CL')
+    # ax.legend()
+    # fig.tight_layout()
+    # fig.savefig(path / 'cip.png', dpi = 300)
+    # plt.show()
+
+    # dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 4)
