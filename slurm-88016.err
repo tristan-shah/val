@@ -1,6 +1,0 @@
-Traceback (most recent call last):
-  File "/mnt/CICI/home/trisshah/val/scripts/cip/experiments/hopper.py", line 112, in <module>
-    ut, J = mpc(xt, subkey)
-  File "/mnt/CICI/home/trisshah/val/src/val/cem.py", line 81, in __call__
-    J, info = self.objective(xt, U_batch)
-ValueError: too many values to unpack (expected 2)

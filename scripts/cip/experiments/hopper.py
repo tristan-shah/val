@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
@@ -19,7 +19,7 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(seed)
 
     integrator = 'rk4'
-    component = 'ol'
+    component = 'cip'
     dt = 0.01
     horizon = 512
     shots = 512
