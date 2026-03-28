@@ -1,6 +1,6 @@
-# import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-# os.environ['MUJOCO_GL'] = 'egl'
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
 import jax
@@ -24,7 +24,7 @@ if __name__ == '__main__':
     horizon = 512
     shots = 512
     steps = 1000
-    iterations = 1
+    iterations = 5
     elite_frac = 0.1
     smoothing = 0.1
     rho = 0.9
@@ -109,7 +109,7 @@ if __name__ == '__main__':
 
     for t in range(steps):
         key, subkey = jax.random.split(key)
-        ut, J = mpc(xt, subkey)
+        ut, J, info, U = mpc(xt, subkey)
         xt = step(xt, ut)
         print(t, xt, ut, J)
 

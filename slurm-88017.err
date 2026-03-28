@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/mnt/CICI/home/trisshah/val/scripts/cip/experiments/hopper.py", line 112, in <module>
+    ut, J, info, U = mpc(xt, subkey)
+  File "/mnt/CICI/home/trisshah/val/src/val/cem.py", line 109, in __call__
+    'cip': info['cip'][elite_idx].mean(), 
+KeyError: 'cip'
