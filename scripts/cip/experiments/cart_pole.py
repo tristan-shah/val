@@ -40,9 +40,9 @@ if __name__ == '__main__':
     gamma = 1.0
 
     name = f'seed={seed}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
-    # root = Path(f'results/CART_POLE/{component}')
-    root = Path(f'results/CART_POLE/exponential_domain/{component}')
-    # root = Path(f'results/CART_POLE/experimental/{component}')
+    # root = Path(f'results/CIP/CART_POLE/{component}')
+    root = Path(f'results/CIP/CART_POLE/exponential_domain/{component}')
+    # root = Path(f'results/CIP/CART_POLE/experimental/{component}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 
@@ -54,7 +54,6 @@ if __name__ == '__main__':
     # compute_cip = make_compute_cip(dyn)
     # batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
     batch_compute_cip = make_compute_rate(dyn, component = component)
-
 
     ## initialize agent
     mpc = CEM(
@@ -90,10 +89,6 @@ if __name__ == '__main__':
         # fig.tight_layout()
         # fig.savefig(f'controls_{t}.png', dpi = 300)
         # plt.close(fig)
-
-
-
-
 
         xt = step(xt, ut)
         print(t, xt, ut, J)
