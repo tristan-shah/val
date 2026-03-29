@@ -1,26 +1,30 @@
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-os.environ['MUJOCO_GL'] = 'egl'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
 import jax
 from jax import numpy as jnp
 import matplotlib.pyplot as plt
 
-from val import Dynamics, make_step
+from val import Dynamics, make_step, make_unroll
 from val.cem import CEM
 from val.cip import make_compute_cip
 
 def hopper_initial_state():
-    return jnp.array([0.0, -0.245, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    return jnp.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    # return jnp.array([0.0, -0.245, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    # return jnp.array([0.0, -1.0, 1.8, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+
 
 if __name__ == '__main__':
     seed = 0
     key = jax.random.PRNGKey(seed)
 
-    integrator = 'rk4'
+    integrator = 'implicitfast'
     component = 'cip'
     dt = 0.01
+    # dt = 0.0001
     horizon = 512
     shots = 512
     steps = 1000
@@ -37,6 +41,7 @@ if __name__ == '__main__':
 
     ## initialize dynamics
     dyn = Dynamics('xml/unrestricted_hopper.xml', dt = dt, integrator = integrator)
+    # dyn = Dynamics('xml/hopper.xml', dt = dt, integrator = integrator)
 
     ## override default gear strength
     dyn.mjx_model = dyn.mjx_model.replace(
@@ -61,71 +66,91 @@ if __name__ == '__main__':
     
     ## get initial state
     xt = hopper_initial_state()
+    '''
+    test passive dynamics
+    '''
+    horizon = 512
+    unroll = make_unroll(step)
+    traj_linerize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
+    U = jnp.zeros((horizon, dyn.control_dim))
+    # U = jax.random.uniform(key, (horizon, dyn.control_dim)) * 2.0 - 1.0
+    U = jax.random.normal(key, (horizon, dyn.control_dim)) * 1e-3
+    X = unroll(xt, U)
+    fx, fu = traj_linerize(X[:-1], U)
 
-    # '''
-    # test passive dynamics
-    # '''
-    # from val import make_unroll
-    # unroll = make_unroll(step)
-    # traj_linerize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
-    # U = jnp.zeros((horizon, dyn.control_dim))
-    # # U = jax.random.uniform(key, (horizon, dyn.control_dim)) * 2.0 - 1.0
-    # X = unroll(xt, U)
+    horizon, dx, dx = fx.shape
 
-    # fx, fu = traj_linerize(X[:-1], U)
-    
-    # horizon, dx, dx = fx.shape
+    Q = jnp.eye(dx)
+    Y_inv_t = Q.copy()
 
-    # Q = jnp.eye(dx)
-    # Y_inv_t = Q.copy()
+    reward = jnp.zeros(horizon)
 
-    # reward = jnp.zeros(horizon)
+    nq = dyn.nq
 
-    # for t in reversed(range(horizon)):
-    #     # r = jnp.linalg.slogdet(Y_inv_t + fx[t] @ fx[t].T).logabsdet
-    #     r = jnp.linalg.slogdet(Q + fx[t] @ fx[t].T).logabsdet
-    #     Y_inv_t = Q - fx[t].T @ jnp.linalg.inv(Y_inv_t + fx[t] @ fx[t].T) @ fx[t]
-    #     print(r)
+    for t in reversed(range(horizon)):
 
-    #     reward = reward.at[t].set(r)
+        M = fx[t] @ fx[t].T + Q
+        # M = Y_inv_t + fx[t] @ fx[t].T
+        M = M[:nq, :nq]
+        # M = M[nq:, nq:]
+
+        r = jnp.linalg.slogdet(M).logabsdet
+        Y_inv_t = Q - fx[t].T @ jnp.linalg.inv(Y_inv_t + fx[t] @ fx[t].T) @ fx[t]
+
+        print(r)
+        reward = reward.at[t].set(r)
         
-    # fig, ax = plt.subplots(1, 1)
-    # ax.plot(reward)
-    # ax.set_title('Reward During Backwards Recursion')
-    # ax.set_ylabel('Instantanious Reward')
-    # ax.set_xlabel('Timestep (s)')
-    # fig.savefig(f'{integrator}_hopper_reward_{dt}.png', dpi = 300)
-    # plt.show()
-
-    # dyn.render(X, path = 'hopper.mp4', skip = 1, distance = 4)
-
-    '''
-    run mpc
-    '''
-    X = jnp.zeros((steps + 1, dyn.state_dim))
-    X = X.at[0].set(xt)
-
-    hist = jnp.zeros(steps)
-
-    for t in range(steps):
-        key, subkey = jax.random.split(key)
-        ut, J, info, U = mpc(xt, subkey)
-        xt = step(xt, ut)
-        print(t, xt, ut, J)
-
-        X = X.at[t+1].set(xt)
-        hist = hist.at[t].set(J)
-
-    jnp.save(path / 'hist.npy', hist)
-    jnp.save(path / 'traj.npy', X)
-
     fig, ax = plt.subplots(1, 1)
-    ax.set_xlabel('Time (s)')
-    ax.set_ylabel('nats / s')
-    T = jnp.arange(0, steps)
-    ax.plot(T * dt, hist)
-    fig.tight_layout()
-    fig.savefig(path / 'cip.png', dpi = 300)
+    ax.plot(reward)
+    ax.set_title(f'Integrator {integrator}. Reward During Backwards Recursion')
+    ax.set_ylabel('Instantanious Reward')
+
+    # ax.set_title(f'{integrator}: Trace of Jacobian')
+    # ax.set_ylabel('Trace of Jacobian')
+
+
+    ax.set_xlabel('Timestep (s)')
+    fig.savefig(f'{integrator}_hopper_reward_{dt}.png', dpi = 300)
+    # fig.savefig(f'{integrator}_hopper_trace_{dt}.png', dpi = 300)
     plt.show()
 
-    dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 4)
+    dyn.render(X, path = 'hopper.mp4', skip = 1, distance = 4)
+
+
+
+
+
+
+
+
+
+    # '''
+    # run mpc
+    # '''
+    # X = jnp.zeros((steps + 1, dyn.state_dim))
+    # X = X.at[0].set(xt)
+
+    # hist = jnp.zeros(steps)
+
+    # for t in range(steps):
+    #     key, subkey = jax.random.split(key)
+    #     ut, J, info, U = mpc(xt, subkey)
+    #     xt = step(xt, ut)
+    #     print(t, xt, ut, J)
+
+    #     X = X.at[t+1].set(xt)
+    #     hist = hist.at[t].set(J)
+
+    # jnp.save(path / 'hist.npy', hist)
+    # jnp.save(path / 'traj.npy', X)
+
+    # fig, ax = plt.subplots(1, 1)
+    # ax.set_xlabel('Time (s)')
+    # ax.set_ylabel('nats / s')
+    # T = jnp.arange(0, steps)
+    # ax.plot(T * dt, hist)
+    # fig.tight_layout()
+    # fig.savefig(path / 'cip.png', dpi = 300)
+    # plt.show()
+
+    # dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 4)
