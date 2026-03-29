@@ -41,8 +41,8 @@ if __name__ == '__main__':
 
     name = f'seed={seed}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
     # root = Path(f'results/CART_POLE/{component}')
-    # root = Path(f'results/CART_POLE/exponential_domain/{component}')
-    root = Path(f'results/CART_POLE/experimental/{component}')
+    root = Path(f'results/CART_POLE/exponential_domain/{component}')
+    # root = Path(f'results/CART_POLE/experimental/{component}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 
@@ -51,9 +51,9 @@ if __name__ == '__main__':
     step = make_step(dyn)
     unroll = make_unroll(step)
 
-    compute_cip = make_compute_cip(dyn)
-    batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
-    # batch_compute_cip = make_compute_rate(dyn, component = component)
+    # compute_cip = make_compute_cip(dyn)
+    # batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
+    batch_compute_cip = make_compute_rate(dyn, component = component)
 
 
     ## initialize agent
@@ -74,6 +74,7 @@ if __name__ == '__main__':
     X = X.at[0].set(xt)
 
     hist = jnp.zeros((steps, 3))
+    controls = jnp.zeros((steps, dyn.control_dim))
 
     for t in range(steps):
         key, subkey = jax.random.split(key)
@@ -97,11 +98,13 @@ if __name__ == '__main__':
         xt = step(xt, ut)
         print(t, xt, ut, J)
 
+        controls = controls.at[t].set(ut)
         X = X.at[t+1].set(xt)
         hist = hist.at[t].set(jnp.array([info['cip'], info['ol'], info['cl']]))
 
     jnp.save(path / 'hist.npy', hist)
     jnp.save(path / 'traj.npy', X)
+    jnp.save(path / 'U.npy', controls)
 
     fig, ax = plt.subplots(1, 1)
     ax.set_xlabel('Time (s)')
