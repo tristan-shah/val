@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
@@ -41,7 +41,8 @@ if __name__ == '__main__':
 
     name = f'seed={seed}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
     # root = Path(f'results/CART_POLE/{component}')
-    root = Path(f'results/CART_POLE/exponential_domain/{component}')
+    # root = Path(f'results/CART_POLE/exponential_domain/{component}')
+    root = Path(f'results/CART_POLE/experimental/{component}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 
@@ -50,9 +51,9 @@ if __name__ == '__main__':
     step = make_step(dyn)
     unroll = make_unroll(step)
 
-    # compute_cip = make_compute_cip(dyn)
-    # batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
-    batch_compute_cip = make_compute_rate(dyn, component = component)
+    compute_cip = make_compute_cip(dyn)
+    batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
+    # batch_compute_cip = make_compute_rate(dyn, component = component)
 
 
     ## initialize agent

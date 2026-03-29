@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
-# import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-# os.environ['MUJOCO_GL'] = 'egl'
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
 import jax
@@ -38,7 +38,8 @@ if __name__ == '__main__':
     name = f'seed={seed}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
     # root = Path(f'results/SINGLE_PENDULUM/{component}')
     # root = Path(f'results/SINGLE_PENDULUM/exponential_domain/{component}')
-    root = Path(f'results/SINGLE_PENDULUM/qpos/{component}')
+    # root = Path(f'results/SINGLE_PENDULUM/qpos/{component}')
+    root = Path(f'results/SINGLE_PENDULUM/experimental/{component}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 
@@ -161,7 +162,7 @@ if __name__ == '__main__':
     ax.plot(T * dt, hist[:, 2], label = 'CL')
     ax.legend()
     fig.tight_layout()
-    fig.savefig(path / 'cip.png', dpi = 300)
+    fig.savefig(path / 'metrics.png', dpi = 300)
     plt.show()
 
     dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 4)

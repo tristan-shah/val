@@ -65,6 +65,10 @@ def make_compute_entropy(nq: int):
         Q = jnp.eye(dx)
         R = jnp.eye(du)
 
+        # Q = Q.at[nq:, nq:].set(1e-6)
+        # idx = jnp.arange(nq, dx)
+        # Q = Q.at[idx, idx].set(0)
+
         def scan_fn(carry: tuple, inputs: tuple[Array, Array]):
             ## logdet_Y_t: log det of Y_t 
             ## logdet_W_t: log det of W_t
@@ -81,13 +85,13 @@ def make_compute_entropy(nq: int):
             D_t = fx_t + fu_t @ K_t
 
             ## propagate in log space
-            M_ol = Y_inv_t + fx_t @ fx_t.T
-            M_cl = W_inv_t + D_t @ D_t.T
-            logdet_Y_t = logdet_Y_t + jnp.linalg.slogdet(M_ol[:nq, :nq]).logabsdet
-            logdet_W_t = logdet_W_t + jnp.linalg.slogdet(M_cl[:nq, :nq]).logabsdet
-            # logdet_Y_t = jnp.linalg.slogdet(M_ol[:nq, :nq]).logabsdet
-            # logdet_W_t = jnp.linalg.slogdet(M_cl[:nq, :nq]).logabsdet
-
+            M_ol = Y_inv_t + fx_t @ fx_t.T# + Q*1e-6
+            M_cl = W_inv_t + D_t @ D_t.T# + Q*1e-6
+            # logdet_Y_t = logdet_Y_t + jnp.linalg.slogdet(M_ol[:nq, :nq]).logabsdet
+            # logdet_W_t = logdet_W_t + jnp.linalg.slogdet(M_cl[:nq, :nq]).logabsdet
+            logdet_Y_t = logdet_Y_t + jnp.linalg.slogdet(M_ol).logabsdet
+            logdet_W_t = logdet_W_t + jnp.linalg.slogdet(M_cl).logabsdet
+            
             ## propagate inverses
             Y_inv_t = Q - fx_t.T @ jnp.linalg.inv(M_ol) @ fx_t
             W_inv_t = Q - D_t.T @ jnp.linalg.inv(M_cl) @ D_t
@@ -118,12 +122,16 @@ def make_compute_cip(dyn: Dynamics, component: str = 'cip'):
     traj_linerize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
     unroll = make_unroll(step)
     dt = dyn.mjx_model.opt.timestep
+    nq = dyn.nq
 
     compute_entropy = make_compute_entropy(dyn.nq)
 
     def compute_cip(xt: Array, U: Array):
         X = unroll(xt, U)
         fx, fu = traj_linerize(X[:-1], U)
+
+        # fx = fx[:, :nq, :nq]
+        # fu = fu[:, :nq, :]
 
         ## calculate logdet of the recursions
         logdet_Y, logdet_W = compute_entropy(fx, fu)
@@ -176,6 +184,7 @@ def compute_feedback(fx: Array, fu: Array):
     _, K = jax.lax.scan(scan_fn, init = V_T, xs = (fx, fu), reverse = True)
     return K
 
+
 @jax.jit
 def compute_entropy_approximation(fx: Array, fu: Array):
     K = compute_feedback(fx, fu)
@@ -191,6 +200,7 @@ def compute_entropy_approximation(fx: Array, fu: Array):
     cl = jnp.linalg.slogdet(I + cl_matrix).logabsdet
 
     return ol, cl
+
 
 def make_compute_cip_approximation(dyn: Dynamics):
 
