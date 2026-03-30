@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-os.environ['MUJOCO_GL'] = 'egl'
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
 import jax
@@ -28,6 +28,7 @@ if __name__ == '__main__':
     parser.add_argument('--component', type = str, default = 'ol')
     parser.add_argument('--horizon', type = int, default = 150)
     parser.add_argument('--shots', type = int, default = 512)
+    parser.add_argument('--gear', type = float, default = 25)
     args = parser.parse_args()
 
     seed = args.seed
@@ -42,14 +43,20 @@ if __name__ == '__main__':
     iterations = 1
     elite_frac = 0.1
     smoothing = 0.1
-    rho = 0.999
+    rho = 0.9
 
-    # name = f'seed={seed}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
+    name = f'seed={seed}-gear={args.gear}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
     # root = Path(f'results/TRIPLE_PENDULUM/{component}')
     # path = root / name
     # path.mkdir(parents = True, exist_ok = True)
 
     dyn = Dynamics('xml/triple_pendulum.xml', dt = dt)
+
+    ## override default gear strength
+    dyn.mjx_model = dyn.mjx_model.replace(
+        actuator_gear = dyn.mjx_model.actuator_gear.at[:, 0].set(args.gear)
+    )
+
     step = make_step(dyn)
 
     print(dyn.mjx_model.actuator_gear)
