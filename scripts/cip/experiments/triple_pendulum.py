@@ -34,10 +34,10 @@ if __name__ == '__main__':
 
     component = args.component
 
-    dt = 0.05
+    dt = 0.01
     horizon = args.horizon
     shots = 512
-    steps = 600
+    steps = 1200
     iterations = 1
     elite_frac = 0.1
     smoothing = 0.1
