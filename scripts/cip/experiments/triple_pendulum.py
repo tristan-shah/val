@@ -27,6 +27,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type = int, default = 0)
     parser.add_argument('--component', type = str, default = 'ol')
     parser.add_argument('--horizon', type = int, default = 150)
+    parser.add_argument('--shots', type = int, default = 512)
     args = parser.parse_args()
 
     seed = args.seed
@@ -36,7 +37,7 @@ if __name__ == '__main__':
 
     dt = 0.01
     horizon = args.horizon
-    shots = 512
+    shots = args.shots
     steps = 1200
     iterations = 1
     elite_frac = 0.1
