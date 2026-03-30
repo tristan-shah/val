@@ -114,4 +114,4 @@ if __name__ == '__main__':
     fig.savefig(path / 'metrics.png', dpi = 300)
     plt.show()
 
-    dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 4)
+    dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 5)
