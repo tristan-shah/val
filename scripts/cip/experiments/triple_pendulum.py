@@ -46,9 +46,9 @@ if __name__ == '__main__':
     rho = 0.9
 
     name = f'seed={seed}-gear={args.gear}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
-    # root = Path(f'results/TRIPLE_PENDULUM/{component}')
-    # path = root / name
-    # path.mkdir(parents = True, exist_ok = True)
+    root = Path(f'results/TRIPLE_PENDULUM/{component}')
+    path = root / name
+    path.mkdir(parents = True, exist_ok = True)
 
     dyn = Dynamics('xml/triple_pendulum.xml', dt = dt)
 
@@ -59,60 +59,58 @@ if __name__ == '__main__':
 
     step = make_step(dyn)
 
-    print(dyn.mjx_model.actuator_gear)
+    compute_cip = make_compute_cip(dyn, component)
+    batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
 
-    # compute_cip = make_compute_cip(dyn, component)
-    # batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
+    ## initialize agent
+    mpc = CEM(
+        dyn,
+        batch_compute_cip,
+        shots,
+        horizon, 
+        iterations, 
+        elite_frac,
+        smoothing,
+        rho)
 
-    # ## initialize agent
-    # mpc = CEM(
-    #     dyn,
-    #     batch_compute_cip,
-    #     shots,
-    #     horizon, 
-    #     iterations, 
-    #     elite_frac,
-    #     smoothing,
-    #     rho)
+    xt = jnp.zeros(dyn.state_dim)
+    xt = xt.at[0].set(jnp.pi) ## start from bottom
 
-    # xt = jnp.zeros(dyn.state_dim)
-    # xt = xt.at[0].set(jnp.pi) ## start from bottom
+    '''
+    Run MPC
+    '''
+    X = jnp.zeros((steps + 1, dyn.state_dim))
+    X = X.at[0].set(xt)
 
-    # '''
-    # Run MPC
-    # '''
-    # X = jnp.zeros((steps + 1, dyn.state_dim))
-    # X = X.at[0].set(xt)
+    hist = jnp.zeros((steps, 3))
+    controls = jnp.zeros((steps, dyn.control_dim))
 
-    # hist = jnp.zeros((steps, 3))
-    # controls = jnp.zeros((steps, dyn.control_dim))
+    for t in range(steps):
 
-    # for t in range(steps):
+        key, subkey = jax.random.split(key)
+        ut, J, info, U = mpc(xt, subkey)
 
-    #     key, subkey = jax.random.split(key)
-    #     ut, J, info, U = mpc(xt, subkey)
+        xt = step(xt, ut)
+        print(t, xt, ut, J)
 
-    #     xt = step(xt, ut)
-    #     print(t, xt, ut, J)
+        controls = controls.at[t].set(ut)
+        X = X.at[t+1].set(xt)
+        hist = hist.at[t].set(jnp.array([info['cip'], info['ol'], info['cl']]))
 
-    #     controls = controls.at[t].set(ut)
-    #     X = X.at[t+1].set(xt)
-    #     hist = hist.at[t].set(jnp.array([info['cip'], info['ol'], info['cl']]))
+    jnp.save(path / 'hist.npy', hist)
+    jnp.save(path / 'traj.npy', X)
+    jnp.save(path / 'U.npy', controls)
 
-    # jnp.save(path / 'hist.npy', hist)
-    # jnp.save(path / 'traj.npy', X)
-    # jnp.save(path / 'U.npy', controls)
+    fig, ax = plt.subplots(1, 1)
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('nats / s')
+    T = jnp.arange(0, steps)
+    ax.plot(T * dt, hist[:, 0], label = 'CIP')
+    ax.plot(T * dt, hist[:, 1], label = 'OL')
+    ax.plot(T * dt, hist[:, 2], label = 'CL')
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(path / 'metrics.png', dpi = 300)
+    plt.show()
 
-    # fig, ax = plt.subplots(1, 1)
-    # ax.set_xlabel('Time (s)')
-    # ax.set_ylabel('nats / s')
-    # T = jnp.arange(0, steps)
-    # ax.plot(T * dt, hist[:, 0], label = 'CIP')
-    # ax.plot(T * dt, hist[:, 1], label = 'OL')
-    # ax.plot(T * dt, hist[:, 2], label = 'CL')
-    # ax.legend()
-    # fig.tight_layout()
-    # fig.savefig(path / 'metrics.png', dpi = 300)
-    # plt.show()
-
-    # dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 4)
+    dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 4)
