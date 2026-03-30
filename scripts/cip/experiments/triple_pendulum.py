@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-# os.environ['MUJOCO_GL'] = 'egl'
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
 import jax
@@ -29,6 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('--horizon', type = int, default = 150)
     parser.add_argument('--shots', type = int, default = 512)
     parser.add_argument('--gear', type = float, default = 25)
+    parser.add_argument('--iterations', type = int, default = 1)
     args = parser.parse_args()
 
     seed = args.seed
@@ -40,7 +41,7 @@ if __name__ == '__main__':
     horizon = args.horizon
     shots = args.shots
     steps = 1200
-    iterations = 1
+    iterations = args.iterations
     elite_frac = 0.1
     smoothing = 0.1
     rho = 0.9

@@ -18,5 +18,5 @@ export PYTHONUNBUFFERED=1  # Add this
 # python scripts/cip/experiments/single_pendulum.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 150
 # python scripts/cip/experiments/cart_pole.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 400
 # python scripts/cip/experiments/double_pendulum.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 512
-python scripts/cip/experiments/triple_pendulum.py --seed 0 --component ol --horizon 512 --shots 512 --gear 15
+python scripts/cip/experiments/triple_pendulum.py --seed 0 --component ol --horizon 1024 --shots 1024 --gear 50 --iterations 10
 
