@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
@@ -30,6 +30,8 @@ if __name__ == '__main__':
     parser.add_argument('--shots', type = int, default = 512)
     parser.add_argument('--gear', type = float, default = 25)
     parser.add_argument('--iterations', type = int, default = 1)
+    parser.add_argument('--steps', type = int, default = 1200)
+    parser.add_argument('--beta', type = float, default = 0)
     args = parser.parse_args()
 
     seed = args.seed
@@ -40,13 +42,14 @@ if __name__ == '__main__':
     dt = 0.01
     horizon = args.horizon
     shots = args.shots
-    steps = 1200
+    steps = args.steps
     iterations = args.iterations
     elite_frac = 0.1
     smoothing = 0.1
     rho = 0.9
+    beta = args.beta
 
-    name = f'seed={seed}-gear={args.gear}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
+    name = f'seed={seed}-gear={args.gear}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
     root = Path(f'results/TRIPLE_PENDULUM/{component}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
@@ -61,12 +64,21 @@ if __name__ == '__main__':
     step = make_step(dyn)
 
     compute_cip = make_compute_cip(dyn, component)
-    batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
+    # batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
+
+    def objective(xt, U):
+        J, info = compute_cip(xt, U)
+        control_penalty = jnp.mean(jnp.sum(U ** 2, axis = 1))
+        info['control_penalty'] = control_penalty
+        return J - beta * control_penalty, info
+
+    batch_objective = jax.jit(jax.vmap(objective, in_axes = (None, 0)))
 
     ## initialize agent
     mpc = CEM(
         dyn,
-        batch_compute_cip,
+        # batch_compute_cip,
+        batch_objective,
         shots,
         horizon, 
         iterations, 
@@ -76,6 +88,11 @@ if __name__ == '__main__':
 
     xt = jnp.zeros(dyn.state_dim)
     xt = xt.at[0].set(jnp.pi) ## start from bottom
+
+    # print(xt)
+    # U = jnp.zeros((horizon, dyn.control_dim))
+    # J, info = compute_cip()
+    # print(compute_cip(xt, U))
 
     '''
     Run MPC
