@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-# os.environ['MUJOCO_GL'] = 'egl'
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
 import jax
@@ -11,14 +11,6 @@ import matplotlib.pyplot as plt
 from val import Dynamics, make_step, make_unroll
 from val.cem import CEM
 from val.cip import make_compute_cip
-from val.info import make_compute_rate
-
-
-# U = jnp.zeros((horizon, dyn.control_dim))
-# # U = jax.random.normal(jax.random.key(0), (horizon, dyn.control_dim))
-# unroll = make_unroll(step)
-# X = unroll(xt, U)
-# dyn.render(X, path = 'triple_pendulum.mp4', skip = 2, distance = 5)
 
 
 if __name__ == '__main__':
@@ -27,11 +19,10 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type = int, default = 0)
     parser.add_argument('--component', type = str, default = 'ol')
     parser.add_argument('--horizon', type = int, default = 150)
-    parser.add_argument('--shots', type = int, default = 512)
-    parser.add_argument('--gear', type = float, default = 25)
+    parser.add_argument('--shots', type = int, default = 1024)
     parser.add_argument('--iterations', type = int, default = 1)
     parser.add_argument('--steps', type = int, default = 1200)
-    parser.add_argument('--beta', type = float, default = 0)
+    parser.add_argument('--beta', type = float, default = 2.5)
     args = parser.parse_args()
 
     seed = args.seed
@@ -49,7 +40,7 @@ if __name__ == '__main__':
     rho = 0.9
     beta = args.beta
 
-    name = f'seed={seed}-gear={args.gear}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
+    name = f'seed={seed}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
     root = Path(f'results/HUMULUM/{component}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
@@ -57,12 +48,11 @@ if __name__ == '__main__':
     dyn = Dynamics('xml/humulum.xml', dt = dt)
     print(f'State Dim {dyn.state_dim}, Control Dim {dyn.control_dim}')
 
-    # ## override default gear strength
-    # dyn.mjx_model = dyn.mjx_model.replace(
-    #     actuator_gear = dyn.mjx_model.actuator_gear.at[:, 0].set(args.gear)
-    # )
-
     step = make_step(dyn)
+
+    '''
+    Inspecting Jacobians
+    '''
     # unroll = make_unroll(step)
 
     # xt = jnp.zeros(dyn.state_dim)
