@@ -1,4 +1,3 @@
-import time
 from argparse import ArgumentParser
 import os
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -12,68 +11,137 @@ import matplotlib.pyplot as plt
 from val import Dynamics, make_step, make_unroll
 from val.cem import CEM
 from val.cip import make_compute_cip
+from val.info import make_compute_rate
 
 
+# U = jnp.zeros((horizon, dyn.control_dim))
+# # U = jax.random.normal(jax.random.key(0), (horizon, dyn.control_dim))
+# unroll = make_unroll(step)
+# X = unroll(xt, U)
+# dyn.render(X, path = 'triple_pendulum.mp4', skip = 2, distance = 5)
 
-
-import mujoco
-from mujoco import MjModel, MjData
-def live_viewer(model: MjModel, data: MjData):
-
-    with mujoco.viewer.launch_passive(model, data) as viewer:
-        while viewer.is_running():
-
-            step_start = time.time()
-
-            mujoco.mj_step(model, data)
-            viewer.sync()
-
-            time_until_next_step = model.opt.timestep - (time.time() - step_start)
-
-            if time_until_next_step > 0:
-                time.sleep(time_until_next_step)
-
-    return None
 
 if __name__ == '__main__':
 
+    parser = ArgumentParser()
+    parser.add_argument('--seed', type = int, default = 0)
+    parser.add_argument('--component', type = str, default = 'ol')
+    parser.add_argument('--horizon', type = int, default = 150)
+    parser.add_argument('--shots', type = int, default = 512)
+    parser.add_argument('--gear', type = float, default = 25)
+    parser.add_argument('--iterations', type = int, default = 1)
+    parser.add_argument('--steps', type = int, default = 1200)
+    parser.add_argument('--beta', type = float, default = 0)
+    args = parser.parse_args()
 
-    model = mujoco.MjModel.from_xml_path('xml/humanoid.xml')
+    seed = args.seed
+    key = jax.random.PRNGKey(seed)
 
-    data = mujoco.MjData(model)
-    # data.qpos = mjx_data.qpos
-    # data.qvel = mjx_data.qvel
-    mujoco.mj_forward(model, data)
+    component = args.component
 
-    live_viewer(model, data)
+    dt = 0.01
+    horizon = args.horizon
+    shots = args.shots
+    steps = args.steps
+    iterations = args.iterations
+    elite_frac = 0.1
+    smoothing = 0.1
+    rho = 0.9
+    beta = args.beta
 
+    name = f'seed={seed}-gear={args.gear}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
+    root = Path(f'results/HUMULUM/{component}')
+    path = root / name
+    path.mkdir(parents = True, exist_ok = True)
 
+    dyn = Dynamics('xml/humulum.xml', dt = dt)
+    print(f'State Dim {dyn.state_dim}, Control Dim {dyn.control_dim}')
 
+    # ## override default gear strength
+    # dyn.mjx_model = dyn.mjx_model.replace(
+    #     actuator_gear = dyn.mjx_model.actuator_gear.at[:, 0].set(args.gear)
+    # )
 
-
-    # horizon = 1000
-    # dt = 0.003
-
-    # dyn = Dynamics('xml/humulum.xml', dt = dt)
-
-    # low = dyn.mjx_model.actuator_ctrlrange[:, 0]
-    # high = dyn.mjx_model.actuator_ctrlrange[:, 1]
-
-    # print(dyn.state_dim, dyn.control_dim)
-
-    # step = make_step(dyn)
+    step = make_step(dyn)
     # unroll = make_unroll(step)
 
-
-    # qpos = dyn.mjx_model.key_qpos[0]
-    # qvel = jnp.zeros(dyn.mjx_model.nv)
-    # xt = jnp.concatenate([qpos, qvel])
-
-    # # U = jnp.zeros((horizon, dyn.control_dim))
-    # U = jax.random.uniform(jax.random.key(0), (horizon, dyn.control_dim), minval = low, maxval = high)
+    # xt = jnp.zeros(dyn.state_dim)
+    # U = jnp.zeros((horizon, dyn.control_dim))
     # X = unroll(xt, U)
 
-    # dyn.render(X, path = 'vid.mp4', skip = 3, distance = 4, lookat = jnp.array([0, 0, 1]))
+    # traj_linerize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
+    # U = jnp.zeros((horizon, dyn.control_dim))
+    # X = unroll(xt, U)
+    # fx, fu = traj_linerize(X[:-1], U)
+
+    # dyn.render(X, path = 'vid.mp4', skip = 1, distance = 5, lookat = jnp.array([0.0, 0.0, 0.0]))
+    # fig, ax = plt.subplots(1, 1)
+    # ax.plot(jnp.linalg.slogdet(fx).logabsdet)
+    # ax.set_title('Reward During Backwards Recursion')
+    # ax.set_ylabel('Instantanious Reward')
+    # ax.set_xlabel('Timestep (s)')
+    # fig.savefig('single_pendulum_reward.png', dpi = 300)
+    # plt.show()
 
 
+    compute_cip = make_compute_cip(dyn, component)
 
+    def objective(xt, U):
+        J, info = compute_cip(xt, U)
+        control_penalty = jnp.mean(jnp.sum(U ** 2, axis = 1))
+        info['control_penalty'] = control_penalty
+        return J - beta * control_penalty, info
+
+    batch_objective = jax.jit(jax.vmap(objective, in_axes = (None, 0)))
+
+    ## initialize agent
+    mpc = CEM(
+        dyn,
+        batch_objective,
+        shots,
+        horizon, 
+        iterations, 
+        elite_frac,
+        smoothing,
+        rho)
+
+    xt = jnp.zeros(dyn.state_dim)
+
+    '''
+    Run MPC
+    '''
+    X = jnp.zeros((steps + 1, dyn.state_dim))
+    X = X.at[0].set(xt)
+
+    hist = jnp.zeros((steps, 3))
+    controls = jnp.zeros((steps, dyn.control_dim))
+
+    for t in range(steps):
+
+        key, subkey = jax.random.split(key)
+        ut, J, info, U = mpc(xt, subkey)
+
+        xt = step(xt, ut)
+        print(t, xt, ut, J)
+
+        controls = controls.at[t].set(ut)
+        X = X.at[t+1].set(xt)
+        hist = hist.at[t].set(jnp.array([info['cip'], info['ol'], info['cl']]))
+
+    jnp.save(path / 'hist.npy', hist)
+    jnp.save(path / 'traj.npy', X)
+    jnp.save(path / 'U.npy', controls)
+
+    fig, ax = plt.subplots(1, 1)
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('nats / s')
+    T = jnp.arange(0, steps)
+    ax.plot(T * dt, hist[:, 0], label = 'CIP')
+    ax.plot(T * dt, hist[:, 1], label = 'OL')
+    ax.plot(T * dt, hist[:, 2], label = 'CL')
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(path / 'metrics.png', dpi = 300)
+    plt.show()
+
+    dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 5, lookat = jnp.array([0.0, 0.0, 0.0]))
