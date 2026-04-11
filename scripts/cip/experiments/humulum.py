@@ -22,7 +22,7 @@ if __name__ == '__main__':
     parser.add_argument('--shots', type = int, default = 1024)
     parser.add_argument('--iterations', type = int, default = 1)
     parser.add_argument('--steps', type = int, default = 1200)
-    parser.add_argument('--beta', type = float, default = 2.5)
+    parser.add_argument('--beta', type = float, default = 20)
     args = parser.parse_args()
 
     seed = args.seed
@@ -73,7 +73,9 @@ if __name__ == '__main__':
     # fig.savefig('single_pendulum_reward.png', dpi = 300)
     # plt.show()
 
-
+    '''
+    running experiments
+    '''
     compute_cip = make_compute_cip(dyn, component)
 
     def objective(xt, U):
