@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
@@ -18,7 +18,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--seed', type = int, default = 0)
     parser.add_argument('--component', type = str, default = 'ol')
-    parser.add_argument('--horizon', type = int, default = 150)
+    parser.add_argument('--horizon', type = int, default = 125)
     parser.add_argument('--shots', type = int, default = 1024)
     parser.add_argument('--iterations', type = int, default = 1)
     parser.add_argument('--steps', type = int, default = 1200)
@@ -40,24 +40,24 @@ if __name__ == '__main__':
     rho = 0.9
     beta = args.beta
 
-    name = f'seed={seed}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
+    name = f'hanging-seed={seed}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
     root = Path(f'results/HUMULUM/{component}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 
     dyn = Dynamics('xml/humulum.xml', dt = dt)
     print(f'State Dim {dyn.state_dim}, Control Dim {dyn.control_dim}')
-
     step = make_step(dyn)
 
     '''
     Inspecting Jacobians
     '''
     # unroll = make_unroll(step)
-
     # xt = jnp.zeros(dyn.state_dim)
     # U = jnp.zeros((horizon, dyn.control_dim))
     # X = unroll(xt, U)
+    # dyn.render(X, path = 'vid.mp4', skip = 1, distance = 5, lookat = jnp.array([0.0, 0.0, 0.0]))
+    # jnp.save('hanging.npy', X[-1])
 
     # traj_linerize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
     # U = jnp.zeros((horizon, dyn.control_dim))
@@ -95,7 +95,8 @@ if __name__ == '__main__':
         smoothing,
         rho)
 
-    xt = jnp.zeros(dyn.state_dim)
+    # xt = jnp.zeros(dyn.state_dim)
+    xt = jnp.load('hanging.npy')
 
     '''
     Run MPC
