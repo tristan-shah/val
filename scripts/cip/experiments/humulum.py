@@ -53,7 +53,8 @@ if __name__ == '__main__':
     Inspecting Jacobians
     '''
     # unroll = make_unroll(step)
-    # xt = jnp.zeros(dyn.state_dim)
+    # # xt = jnp.zeros(dyn.state_dim)
+    # xt = jnp.array([ 0.09775014, -1.39032381, -0.17945133, -9.18916585, -0.22687532, -2.83000996, -0.58775984, -3.11106805,  5.9438938,  -2.76260467, -3.25290835,  6.21545617, -2.98282071, -0.0860292,  -0.24991344, -0.78397854,  5.4348995,  -0.17934932, 1.29874635,  0.28419849, -2.17410129,  4.55332331, -2.71123992, -3.21266527, 6.98111577, -2.08634421])
     # U = jnp.zeros((horizon, dyn.control_dim))
     # X = unroll(xt, U)
     # dyn.render(X, path = 'vid.mp4', skip = 1, distance = 5, lookat = jnp.array([0.0, 0.0, 0.0]))
