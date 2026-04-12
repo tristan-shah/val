@@ -18,11 +18,11 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--seed', type = int, default = 0)
     parser.add_argument('--component', type = str, default = 'ol')
-    parser.add_argument('--horizon', type = int, default = 125)
-    parser.add_argument('--shots', type = int, default = 1024)
+    parser.add_argument('--horizon', type = int, default = 512)
+    parser.add_argument('--shots', type = int, default = 256)
     parser.add_argument('--iterations', type = int, default = 1)
     parser.add_argument('--steps', type = int, default = 1200)
-    parser.add_argument('--beta', type = float, default = 20)
+    parser.add_argument('--beta', type = float, default = 9.0)
     args = parser.parse_args()
 
     seed = args.seed
@@ -40,8 +40,8 @@ if __name__ == '__main__':
     rho = 0.9
     beta = args.beta
 
-    name = f'warmstart-hanging-seed={seed}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
-    root = Path(f'results/HUMULUM/{component}')
+    name = f'seed={seed}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
+    root = Path(f'results/HUMULUM/dataset/{component}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 
