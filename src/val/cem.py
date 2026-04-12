@@ -65,7 +65,7 @@ class CEM:
 
         return None
 
-    def __call__(self, xt: Array, key):
+    def __call__(self, xt: Array, key, roll: bool = True):
 
         for _ in range(self.iterations):
 
@@ -101,9 +101,10 @@ class CEM:
         U_best = U_batch[best_idx]
         ut = U_best[0]
 
-        ## rolls over mean, std, and elite sequences one step
-        # self.roll(key)
-        self.roll()
+        if roll:
+            ## rolls over mean, std, and elite sequences one step
+            # self.roll(key)
+            self.roll()
 
         info = {
             'cip': info['cip'][elite_idx].mean(), 

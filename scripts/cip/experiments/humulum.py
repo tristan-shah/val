@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-os.environ['MUJOCO_GL'] = 'egl'
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
 import jax
@@ -100,6 +100,15 @@ if __name__ == '__main__':
 
     # xt = jnp.zeros(dyn.state_dim)
     xt = jnp.load('hanging.npy')
+
+
+    ## warmstart
+    for i in range(10):
+        key, subkey = jax.random.split(key)
+        ut, J, info, U = mpc(xt, subkey, roll = False)
+        print(i, J)
+
+
 
     '''
     Run MPC
