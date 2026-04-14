@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
@@ -20,6 +20,7 @@ if __name__ == '__main__':
     parser.add_argument('--horizon', type = int, default = 512)
     parser.add_argument('--shots', type = int, default = 256)
     parser.add_argument('--iterations', type = int, default = 1)
+    parser.add_argument('--elite_frac', type = float, default = 0.1)
     parser.add_argument('--steps', type = int, default = 1200)
     parser.add_argument('--beta', type = float, default = 9.0)
     args = parser.parse_args()
@@ -34,7 +35,7 @@ if __name__ == '__main__':
     shots = args.shots
     steps = args.steps
     iterations = args.iterations
-    elite_frac = 0.1
+    elite_frac = args.elite_frac
     smoothing = 0.1
     rho = 0.9
     beta = args.beta

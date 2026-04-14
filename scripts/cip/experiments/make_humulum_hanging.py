@@ -8,14 +8,9 @@ from val import Dynamics, make_step, make_unroll
 
 import re
 
-# def parse_state_string(s):
-#     numbers = re.findall(r'[-+]?\d+\.\d+e[+-]\d+', s)
-#     return jnp.array([float(n) for n in numbers])
-
 def parse_state_string(s):
     numbers = re.findall(r'[-+]?\d+\.?\d*(?:e[+-]?\d+)?', s)
     return jnp.array([float(n) for n in numbers])
-
 
 state = '''
 [ 2.04514046e-01 -4.99051551e-02  1.75138192e+01  5.82318228e+00
