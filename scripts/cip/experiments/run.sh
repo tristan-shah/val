@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=CIP          # Name of the job
+#SBATCH --job-name=humanoid          # Name of the job
 #SBATCH --partition=h100          # Request the h100 partition
 #SBATCH --gres=gpu:1              # Request GPU
 #SBATCH --cpus-per-task=16
@@ -18,5 +18,7 @@ export PYTHONUNBUFFERED=1  # Add this
 # python scripts/cip/experiments/single_pendulum.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 150
 # python scripts/cip/experiments/cart_pole.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 400
 # python scripts/cip/experiments/double_pendulum.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 512
-python scripts/cip/experiments/triple_pendulum.py --seed 0 --component ol --horizon 1024 --shots 1024 --gear 10 --iterations 30 --steps 1024
+# python scripts/cip/experiments/triple_pendulum.py --seed 0 --component ol --horizon 1024 --shots 1024 --gear 10 --iterations 30 --steps 1024
+python scripts/cip/experiments/humulum.py --seed 0 --component ol --horizon 512 --shots 1024 --iterations 1 --beta 5.0
+
 
