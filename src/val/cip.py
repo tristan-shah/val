@@ -1,58 +1,10 @@
 import jax
 from jax import Array
 from jax import numpy as jnp
+import chex
 from einops import einsum
 
 from val import Dynamics, make_step, make_unroll
-
-# @jax.jit
-# def compute_entropy(fx: Array, fu: Array):
-
-#     dx = fx.shape[-1]
-#     du = fu.shape[-1]
-
-#     Q = jnp.eye(dx)
-#     R = jnp.eye(du)
-
-#     def scan_fn(carry: tuple, inputs: tuple[Array, Array]):
-#         ## logdet_Y_t: log det of Y_t 
-#         ## logdet_W_t: log det of W_t
-#         ## Y_inv_t: inverse of Y_t 
-#         ## W_inv_t: inverse of W_t
-#         ## V_t: solution to Riccati Equation
-#         logdet_Y_t, logdet_W_t, Y_inv_t, W_inv_t, V_t = carry
-#         fx_t, fu_t = inputs
-
-#         S_inv = jnp.linalg.inv(R + fu_t.T @ V_t @ fu_t)
-#         ## optimal feedback gain
-#         K_t = - S_inv @ fu_t.T @ V_t @ fx_t
-#         ## closed loop entropy
-#         D_t = fx_t + fu_t @ K_t
-
-#         ## propagate in log space
-#         M_ol = Y_inv_t + fx_t @ fx_t.T
-#         M_cl = W_inv_t + D_t @ D_t.T
-#         logdet_Y_t = logdet_Y_t + jnp.linalg.slogdet(M_ol).logabsdet
-#         logdet_W_t = logdet_W_t + jnp.linalg.slogdet(M_cl).logabsdet
-
-#         ## propagate inverses
-#         Y_inv_t = Q - fx_t.T @ jnp.linalg.inv(M_ol) @ fx_t
-#         W_inv_t = Q - D_t.T @ jnp.linalg.inv(M_cl) @ D_t
-#         ## propagate Riccati
-#         V_t = Q + fx_t.T @ V_t @ fx_t - fx_t.T @ V_t @ fu_t @ S_inv @ fu_t.T @ V_t @ fx_t
-
-#         carry = (logdet_Y_t, logdet_W_t, Y_inv_t, W_inv_t, V_t)
-#         return carry, (logdet_Y_t, logdet_W_t)
-
-#     logdet_Y_T = jnp.array(0.0)
-#     logdet_W_T = jnp.array(0.0)
-#     Y_inv_T = Q
-#     W_inv_T = Q
-#     V_T = Q
-
-#     init = (logdet_Y_T, logdet_W_T, Y_inv_T, W_inv_T, V_T)
-#     _, (logdet_Y, logdet_W) = jax.lax.scan(scan_fn, init = init, xs = (fx, fu), reverse = True)
-#     return logdet_Y, logdet_W
 
 
 def make_compute_entropy(nq: int):
@@ -64,10 +16,6 @@ def make_compute_entropy(nq: int):
 
         Q = jnp.eye(dx)
         R = jnp.eye(du)
-
-        # Q = Q.at[nq:, nq:].set(1e-6)
-        # idx = jnp.arange(nq, dx)
-        # Q = Q.at[idx, idx].set(0)
 
         def scan_fn(carry: tuple, inputs: tuple[Array, Array]):
             ## logdet_Y_t: log det of Y_t 
@@ -84,17 +32,18 @@ def make_compute_entropy(nq: int):
             ## closed loop entropy
             D_t = fx_t + fu_t @ K_t
 
-            ## propagate in log space
-            M_ol = Y_inv_t + fx_t @ fx_t.T# + Q*1e-6
-            M_cl = W_inv_t + D_t @ D_t.T# + Q*1e-6
-            # logdet_Y_t = logdet_Y_t + jnp.linalg.slogdet(M_ol[:nq, :nq]).logabsdet
-            # logdet_W_t = logdet_W_t + jnp.linalg.slogdet(M_cl[:nq, :nq]).logabsdet
+            ## form matrices to invert
+            M_ol = Y_inv_t + fx_t @ fx_t.T
+            M_cl = W_inv_t + D_t @ D_t.T
+
+            ## accumulate logdet
             logdet_Y_t = logdet_Y_t + jnp.linalg.slogdet(M_ol).logabsdet
             logdet_W_t = logdet_W_t + jnp.linalg.slogdet(M_cl).logabsdet
             
             ## propagate inverses
             Y_inv_t = Q - fx_t.T @ jnp.linalg.inv(M_ol) @ fx_t
             W_inv_t = Q - D_t.T @ jnp.linalg.inv(M_cl) @ D_t
+            
             ## propagate Riccati
             V_t = Q + fx_t.T @ V_t @ fx_t - fx_t.T @ V_t @ fu_t @ S_inv @ fu_t.T @ V_t @ fx_t
 
@@ -114,29 +63,96 @@ def make_compute_entropy(nq: int):
     return jax.jit(compute_entropy)
 
 
+def make_compute_entropy_efficient(step: callable):
+    
+    linearize = jax.jacfwd(step, argnums = (0, 1))
+
+    def compute_entropy(X: Array, U: Array):
+        
+        chex.assert_equal_shape([X, U], dims = 0)
+
+        dx = X.shape[-1]
+        du = U.shape[-1]
+
+        Q = jnp.eye(dx)
+        R = jnp.eye(du)
+
+        def scan_fn(carry: tuple, inputs: tuple[Array, Array]):
+            ## logdet_Y_t: log det of Y_t 
+            ## logdet_W_t: log det of W_t
+            ## Y_inv_t: inverse of Y_t 
+            ## W_inv_t: inverse of W_t
+            ## V_t: solution to Riccati Equation
+            logdet_Y_t, logdet_W_t, Y_inv_t, W_inv_t, V_t = carry
+            x_t, u_t = inputs
+            fx_t, fu_t = linearize(x_t, u_t)
+
+            S_inv = jnp.linalg.inv(R + fu_t.T @ V_t @ fu_t)
+            ## optimal feedback gain
+            K_t = - S_inv @ fu_t.T @ V_t @ fx_t
+            ## closed loop entropy
+            D_t = fx_t + fu_t @ K_t
+
+            ## form matrices to invert
+            M_ol = Y_inv_t + fx_t @ fx_t.T
+            M_cl = W_inv_t + D_t @ D_t.T
+
+            ## accumulate logdet
+            logdet_Y_t = logdet_Y_t + jnp.linalg.slogdet(M_ol).logabsdet
+            logdet_W_t = logdet_W_t + jnp.linalg.slogdet(M_cl).logabsdet
+            
+            ## propagate inverses
+            Y_inv_t = Q - fx_t.T @ jnp.linalg.inv(M_ol) @ fx_t
+            W_inv_t = Q - D_t.T @ jnp.linalg.inv(M_cl) @ D_t
+            
+            ## propagate Riccati
+            V_t = Q + fx_t.T @ V_t @ fx_t - fx_t.T @ V_t @ fu_t @ S_inv @ fu_t.T @ V_t @ fx_t
+
+            carry = (logdet_Y_t, logdet_W_t, Y_inv_t, W_inv_t, V_t)
+            return carry, (logdet_Y_t, logdet_W_t)
+
+
+        logdet_Y_T = jnp.array(0.0)
+        logdet_W_T = jnp.array(0.0)
+        Y_inv_T = Q
+        W_inv_T = Q
+        V_T = Q
+
+        init = (logdet_Y_T, logdet_W_T, Y_inv_T, W_inv_T, V_T)
+        _, (logdet_Y, logdet_W) = jax.lax.scan(scan_fn, init = init, xs = (X, U), reverse = True)
+        return logdet_Y, logdet_W
+
+    return jax.jit(compute_entropy)
+
+
 def make_compute_cip(dyn: Dynamics, component: str = 'cip'):
 
     assert component in ['cip', 'ol', 'cl']
 
     step = make_step(dyn)
-    traj_linerize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
+    # traj_linerize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
     unroll = make_unroll(step)
     dt = dyn.mjx_model.opt.timestep
-    nq = dyn.nq
 
-    compute_entropy = make_compute_entropy(dyn.nq)
+
+    ## for memory inneficient calculation
+    # nq = dyn.nq
+    # compute_entropy = make_compute_entropy(nq)
+
+    ## memory efficient calculation
+    compute_entropy_efficient = make_compute_entropy_efficient(step)
 
     def compute_cip(xt: Array, U: Array):
         X = unroll(xt, U)
-        fx, fu = traj_linerize(X[:-1], U)
 
-        # fx = fx[:, :nq, :nq]
-        # fu = fu[:, :nq, :]
+        ## memory inefficient calculation because it requires materialization of lots of jacobians
+        # fx, fu = traj_linerize(X[:-1], U)
+        # logdet_Y, logdet_W = compute_entropy(fx, fu)
 
-        ## calculate logdet of the recursions
-        logdet_Y, logdet_W = compute_entropy(fx, fu)
+        ## memory efficient calculation
+        logdet_Y, logdet_W = compute_entropy_efficient(X[:-1], U)
 
-        horizon = fx.shape[0]
+        horizon = U.shape[0]
         T = jnp.arange(1, horizon + 1)
 
         ## normalize by time

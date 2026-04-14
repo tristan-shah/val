@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-os.environ['MUJOCO_GL'] = 'egl'
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
 import jax
@@ -19,6 +19,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type = int, default = 0)
     parser.add_argument('--component', type = str, default = 'ol')
     parser.add_argument('--horizon', type = int, default = 150)
+    parser.add_argument('--beta', type = float, default = 0.0)
     args = parser.parse_args()
 
     seed = args.seed
@@ -34,29 +35,36 @@ if __name__ == '__main__':
     elite_frac = 0.1
     smoothing = 0.1
     rho = 0.9
+    beta = args.beta
     
-    name = f'seed={seed}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
-    # root = Path(f'results/SINGLE_PENDULUM/{component}')
-    # root = Path(f'results/SINGLE_PENDULUM/exponential_domain/{component}')
-    # root = Path(f'results/SINGLE_PENDULUM/qpos/{component}')
-    root = Path(f'results/SINGLE_PENDULUM/experimental/{component}')
+    name = f'seed={seed}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
+    root = Path(f'results/SINGLE_PENDULUM/{component}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 
     ## initialize dynamics
     dyn = Dynamics('xml/pendulum.xml', dt = dt)
+    print(f'State Dim {dyn.state_dim}, Control Dim {dyn.control_dim}')
     step = make_step(dyn)
-    unroll = make_unroll(step)
 
+
+    ## function for computing cip
     compute_cip = make_compute_cip(dyn, component)
-    batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
 
-    # batch_compute_cip = make_compute_rate(dyn, component = component)
+    ## adding control penalty
+    def objective(xt, U):
+        J, info = compute_cip(xt, U)
+        control_penalty = jnp.mean(jnp.sum(U ** 2, axis = 1))
+        info['control_penalty'] = control_penalty
+        return J - beta * control_penalty, info
+    
+    ## broadcasting over batches
+    batch_objective = jax.jit(jax.vmap(objective, in_axes = (None, 0)))
 
     ## initialize agent
     mpc = CEM(
         dyn,
-        batch_compute_cip,
+        batch_objective,
         shots,
         horizon, 
         iterations, 
@@ -66,53 +74,6 @@ if __name__ == '__main__':
     
     ## get initial state
     xt = jnp.zeros(dyn.state_dim)
-
-
-    # '''
-    # plotting
-    # '''
-    # horizon = 600
-    # # xt = xt.at[0].set(3.14)
-    # unroll = make_unroll(step)
-    # traj_linerize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
-    # U = jnp.zeros((horizon, dyn.control_dim))
-    # X = unroll(xt, U)
-    # fx, fu = traj_linerize(X[:-1], U)
-
-    # from val.cip import make_compute_entropy
-
-    # compute_entropy = make_compute_entropy(dyn.nq)
-
-    # ol, cl = compute_entropy(fx, fu)
-
-    
-    # horizon, dx, dx = fx.shape
-
-    # Q = jnp.eye(dx)
-    # Y_inv_t = Q.copy()
-
-    # reward = jnp.zeros(horizon)
-
-    # for t in reversed(range(horizon)):
-    #     M = Y_inv_t + fx[t] @ fx[t].T + Q * 1e-6
-    #     r = jnp.linalg.slogdet(M[:dyn.nq, :dyn.nq]).logabsdet
-    #     Y_inv_t = Q - fx[t].T @ jnp.linalg.inv(Y_inv_t + fx[t] @ fx[t].T) @ fx[t]
-    #     print(r)
-
-    #     reward = reward.at[t].set(r)
-        
-    # fig, ax = plt.subplots(1, 1)
-    # ax.plot(reward)
-    # ax.plot(ol)
-    # ax.set_title('Reward During Backwards Recursion')
-    # ax.set_ylabel('Instantanious Reward')
-    # ax.set_xlabel('Timestep (s)')
-    # fig.savefig('single_pendulum_reward.png', dpi = 300)
-    # plt.show()
-
-    # dyn.render(X, path = 'vid.mp4', skip = 1, distance = 4)
-
-
 
     '''
     Run MPC
@@ -127,19 +88,6 @@ if __name__ == '__main__':
 
         key, subkey = jax.random.split(key)
         ut, J, info, U = mpc(xt, subkey)
-
-
-        # fig, ax = plt.subplots(1, 1)
-        # ax.plot(U[:, :, 0].T, alpha = 0.1, color = 'blue')
-        # ax.set_xlabel('Planning Horizon')
-        # ax.set_ylabel('Control')
-        # ax.set_ylim(-1.1, 1.1)
-        # fig.tight_layout()
-        # fig.savefig(f'controls_{t}.png', dpi = 300)
-        # plt.close(fig)
-
-
-
 
 
         xt = step(xt, ut)
