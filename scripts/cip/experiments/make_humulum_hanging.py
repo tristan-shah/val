@@ -1,38 +1,50 @@
+import os
+
+import jax
+from jax import numpy as jnp
+import matplotlib.pyplot as plt
+
+from val import Dynamics, make_step, make_unroll
+
+import re
+
+# def parse_state_string(s):
+#     numbers = re.findall(r'[-+]?\d+\.\d+e[+-]\d+', s)
+#     return jnp.array([float(n) for n in numbers])
+
+def parse_state_string(s):
+    numbers = re.findall(r'[-+]?\d+\.?\d*(?:e[+-]?\d+)?', s)
+    return jnp.array([float(n) for n in numbers])
+
+
+state = '''
+[-3.96654778e-03 -7.03107841e-01 -1.80799282e+01 -1.08881612e+01
+ -4.14065508e-01  2.08264939e+00 -5.53295326e-01 -1.42922446e+00
+  9.43933612e+00 -8.02812077e+00 -9.23338496e+00  9.39442976e+00
+ -1.24130978e-01  4.52052962e-02  6.67653757e-02 -3.60784702e+00
+  4.91838411e+00 -4.97035196e-01  3.99895729e+00  2.41390778e+00
+  1.61004152e+01 -3.93051813e-01 -1.62930853e+01 -2.51520371e+00
+ -5.73284423e-01  3.47847708e+00]
+'''
+
+if __name__ == '__main__':
+
+    horizon = 512
+    dt = 0.01
+    dyn = Dynamics('xml/humulum.xml', dt = dt)
+    print(f'State Dim {dyn.state_dim}, Control Dim {dyn.control_dim}')
+    step = make_step(dyn)
 
     '''
     Inspecting Jacobians
     '''
-    # unroll = make_unroll(step)
-    # # xt = jnp.zeros(dyn.state_dim)
-    # xt = jnp.array([
-    #     4.37842171e-02, -7.06415649e-01,  4.58404688e-03,  2.38883152e+00,
-    #     1.77039702e-01, -3.31996537e+00,  7.49812204e-01,  1.58174276e+01,
-    #     3.25496310e+00, -1.90802900e+01,  2.19792342e+01,  3.25215461e+00,
-    #     -2.50979743e+01,  1.06648931e+00, -5.34004770e-04, -2.54689731e+00,
-    #     5.49031977e+00,  2.93148233e+00,  9.35608825e-01, -9.03307414e-01,
-    #     -1.07136141e+01,  2.11564302e+00,  9.04544857e+00,  1.96704250e+00,
-    #     3.19275699e+00, -5.27687866e+00,
-    #     ])
-    # U = jnp.zeros((horizon, dyn.control_dim))
-    # X = unroll(xt, U)
-
-    # compute_entropy_efficient = make_compute_entropy_efficient(step)
-    # logdet_Y, logdet_W = compute_entropy_efficient(X[:-1], U)
-
-    # compute_entropy = make_compute_entropy(dyn.nq)
-    # fx, fu = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))(X[:-1], U)
-
-    # logdet_Y_og, _ = compute_entropy(fx, fu)
-    # print(fx)
-
-    # fig, ax = plt.subplots(1, 1)
-
-    # ax.plot(logdet_Y)
-    # ax.plot(logdet_Y_og)
-    # # ax.plot(logdet_W)
-    # plt.show()
+    unroll = make_unroll(step)
+    # xt = jnp.zeros(dyn.state_dim)
+    xt = parse_state_string(state)
 
 
+    U = jnp.zeros((horizon, dyn.control_dim))
+    X = unroll(xt, U)
 
-    # dyn.render(X, path = 'vid.mp4', skip = 1, distance = 5, lookat = jnp.array([0.0, 0.0, 0.0]))
+    dyn.render(X, path = 'vid.mp4', skip = 1, distance = 5, lookat = jnp.array([0.0, 0.0, 0.0]))
     # jnp.save('hanging.npy', X[-1])
