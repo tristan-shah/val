@@ -1,18 +1,16 @@
 from argparse import ArgumentParser
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-os.environ['MUJOCO_GL'] = 'egl'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
 import jax
-from jax import Array
 from jax import numpy as jnp
 import matplotlib.pyplot as plt
 
-from val import Dynamics, make_step, make_unroll
+from val import Dynamics, make_step
 from val.cem import CEM
 from val.cip import make_compute_cip
-from val.info import make_compute_rate
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -20,6 +18,9 @@ if __name__ == '__main__':
     parser.add_argument('--component', type = str, default = 'ol')
     parser.add_argument('--horizon', type = int, default = 150)
     parser.add_argument('--shots', type = int, default = 512)
+    parser.add_argument('--iterations', type = int, default = 1)
+    parser.add_argument('--elite_frac', type = float, default = 0.1)
+    parser.add_argument('--steps', type = int, default = 300)
     parser.add_argument('--beta', type = float, default = 0.0)
     args = parser.parse_args()
 
@@ -31,9 +32,9 @@ if __name__ == '__main__':
     dt = 0.05
     horizon = args.horizon
     shots = args.shots
-    steps = 600
-    iterations = 1
-    elite_frac = 0.1
+    steps = args.steps
+    iterations = args.iterations
+    elite_frac = args.elite_frac
     smoothing = 0.1
     rho = 0.9
     beta = args.beta
