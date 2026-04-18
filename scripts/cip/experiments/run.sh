@@ -22,4 +22,4 @@ export PYTHONUNBUFFERED=1  # Add this
 # python scripts/cip/experiments/triple_pendulum.py --seed 7 --component ol --horizon 128 --shots 2048 --gear 25 --iterations 2 --beta 2.5
 
 
-python scripts/cip/experiments/humulum.py --component ol --seed $SLURM_ARRAY_TASK_ID --beta 9.0 --horizon 512 --shots 1024 --iterations 1 --elite_frac 0.25
+python scripts/cip/experiments/humulum.py --component ol --seed $SLURM_ARRAY_TASK_ID --beta 9.0 --horizon 512 --shots 1024 --iterations 1 --elite_frac 0.15
