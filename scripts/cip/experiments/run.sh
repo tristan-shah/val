@@ -5,8 +5,9 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --ntasks=1               # Number of tasks
 #SBATCH --time=24:00:00          # Max runtime
-#SBATCH --output=slurm-%j.out    # Output file
-#SBATCH --error=slurm-%j.err     # Error file
+#SBATCH --output=slurm-%A_%a.out
+#SBATCH --error=slurm-%A_%a.err
+#SBATCH --array=0-5
 
 source ~/miniforge3/etc/profile.d/conda.sh 
 conda activate val
@@ -18,7 +19,7 @@ export PYTHONUNBUFFERED=1  # Add this
 # python scripts/cip/experiments/single_pendulum.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 150
 # python scripts/cip/experiments/cart_pole.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 400
 # python scripts/cip/experiments/double_pendulum.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 512
-python scripts/cip/experiments/triple_pendulum.py --seed 7 --component ol --horizon 128 --shots 2048 --gear 25 --iterations 2 --beta 2.5
-# python scripts/cip/experiments/humulum.py --seed 0 --component ol --horizon 512 --shots 1024 --iterations 1 --beta 5.0
+# python scripts/cip/experiments/triple_pendulum.py --seed 7 --component ol --horizon 128 --shots 2048 --gear 25 --iterations 2 --beta 2.5
 
 
+python scripts/cip/experiments/humulum.py --component ol --seed $SLURM_ARRAY_TASK_ID --beta 9.0 --horizon 512 --shots 1024 --iterations 1 --elite_frac 0.25
