@@ -48,12 +48,17 @@ if __name__ == '__main__':
     dt = 0.01
     dyn = Dynamics('xml/humulum.xml', dt=dt)
 
+    # Maximum head height: simulate the model held in a fully upright pose and
+    # run forward dynamics to settle the soft weld constraints, then read head z.
+    # (Hard-coding the rigid-geometry bound of 1.20 m is not exact because the
+    # weld has solimp=".9 .9 0.01" — feet can deviate slightly under load.)
+    max_head_height = compute_max_head_height(dyn)
+
     all_heights = []
 
-    seeds = [0, 1, 2, 3, 6, 7, 8, 9] ## standing
+    # seeds = [0, 1, 2, 3, 6, 7, 8, 9] ## standing
     # seeds = [4, 5] ## crouching
-    # seeds = list(range(10))
-    print(seeds)
+    seeds = list(range(10))
 
     # from val.cip import make_compute_cip
     # compute_cip = make_compute_cip(dyn, 'ol')
@@ -80,16 +85,37 @@ if __name__ == '__main__':
     all_heights = np.array(all_heights)  # (n_seeds, T)
     mean = all_heights.mean(axis=0)
     std = all_heights.std(axis=0)
-    t = np.arange(mean.shape[0]) * dt
+    T = mean.shape[0]
+    t = np.arange(T) * dt
 
     dads_best_skill = jnp.load('results/DADS/HUMULUM/best_skill_seeds.npy')
-    print(dads_best_skill.shape)
 
     diayn_best_skill = jnp.load('results/DIAYN/HUMULUM/best_skill_seeds_diayn_1.npy')
-    print(diayn_best_skill.shape)
 
     smm_best_skill = jnp.load('results/SMM/HUMULUM/best_skill_seeds_smm_1.npy')
-    print(smm_best_skill.shape)
+
+
+    min_head_height = all_heights[:, 0].mean()
+
+    last_frac = 0.10
+    idx = int(T * last_frac)
+
+    print(f'min_head_height: {min_head_height:.4f} m')
+    print(f'max_head_height: {max_head_height:.4f} m\n')
+
+    def report(name, heights_2d):
+        # Per-seed mean over last 10%, min-max normalized → (n_seeds,)
+        per_seed = (np.array(heights_2d)[:, -idx:].mean(axis=1) - min_head_height) / (max_head_height - min_head_height)
+        print(f'{name}')
+        print(f'  mean ± std (normalized): {per_seed.mean():.4f} ± {per_seed.std():.4f}')
+
+    report('CIP', all_heights)
+    report('DIAYN', diayn_best_skill)
+    report('SMM', smm_best_skill)
+    report('DADS', dads_best_skill)
+
+
+
 
     diayn_mean = diayn_best_skill.mean(axis = 0)
     diayn_std = diayn_best_skill.std(axis = 0)
@@ -101,11 +127,6 @@ if __name__ == '__main__':
     dads_std = dads_best_skill.std(axis = 0)
 
 
-    # Maximum head height: simulate the model held in a fully upright pose and
-    # run forward dynamics to settle the soft weld constraints, then read head z.
-    # (Hard-coding the rigid-geometry bound of 1.20 m is not exact because the
-    # weld has solimp=".9 .9 0.01" — feet can deviate slightly under load.)
-    max_head_height = compute_max_head_height(dyn)
 
     plt.figure()
     plt.axhline(max_head_height, color='red', linestyle='dashed', linewidth=1.0, label='max height')
@@ -122,8 +143,7 @@ if __name__ == '__main__':
     plt.fill_between(t, dads_mean - dads_std, dads_mean + dads_std, alpha=0.3)
 
     plt.xlabel('Time (s)')
-    # plt.ylabel('Head height (m)')
-    # plt.title(f'Humanoid head height over time ({len(seeds)} seeds)')
+    
     plt.ylabel('Extremity height (m)')
     plt.title('Gibbon')
     plt.legend()

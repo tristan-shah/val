@@ -51,8 +51,8 @@ if __name__ == '__main__':
     dyn = Dynamics('xml/triple_pendulum.xml', dt=dt)
 
     all_heights = []
-    # seeds = list(range(8))
-    seeds = [0, 1, 3, 4, 5, 6, 7]
+    seeds = list(range(8))
+    # seeds = [0, 1, 3, 4, 5, 6, 7]
     print(f'seeds: {seeds}')
 
     for seed in seeds:
@@ -73,16 +73,27 @@ if __name__ == '__main__':
     t = np.arange(mean.shape[0]) * dt
 
     max_tip_height = compute_max_tip_height(dyn)
-    print(f'max tip height: {max_tip_height:.4f} m')
+    min_tip_height = all_heights[:, 0].mean()
+
+    T = mean.shape[0]
+    last_frac = 0.10
+    idx = int(T * last_frac)
+
+    print(f'min_tip_height: {min_tip_height:.4f} m')
+    print(f'max_tip_height: {max_tip_height:.4f} m\n')
+
+    def report(name, heights_2d):
+        per_seed = (np.array(heights_2d)[:, -idx:].mean(axis=1) - min_tip_height) / (max_tip_height - min_tip_height)
+        print(f'{name}')
+        print(f'  mean ± std (normalized): {per_seed.mean():.4f} ± {per_seed.std():.4f}')
+
+    report('CIP', all_heights)
 
     plt.figure()
     plt.axhline(max_tip_height, color='red', linestyle='dashed', linewidth=1.0, label='max height')
 
     plt.plot(t, mean, label='CIP')
     plt.fill_between(t, mean - std, mean + std, alpha=0.3)
-
-    # for i, seed in enumerate(seeds):
-    #     plt.plot(t, all_heights[i], linewidth=0.8, alpha=0.5, label=f'seed {seed}')
 
     plt.xlabel('Time (s)')
     plt.ylabel('Tip height (m)')

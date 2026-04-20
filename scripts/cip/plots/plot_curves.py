@@ -1,55 +1,29 @@
 from jax import numpy as jnp
 import matplotlib.pyplot as plt
 
-# dt = 0.01
+if __name__ == '__main__':
 
+    dt = 0.01
 
-# name = 'DOUBLE_PENDULUM-gear=6.0-h=512-gamma=1.0-shots=512-iter=10-elite=0.1-smooth=0.1-alpha=1.0-dt=0.01'
-# dp_hist = jnp.load(name + '-hist.npy')[:1200]
+    cart_pole_ol = jnp.load('results/CIP/CART_POLE/ol/seed=0-beta=0.0-h=512-shots=1024-iter=1-elite=0.1-smooth=0.1-rho=0.9-dt=0.01-steps=1200/hist.npy')[:, 1]
+    double_pendulum_ol = jnp.load('results/CIP/DOUBLE_PENDULUM/ol/seed=0-beta=0.0-h=512-shots=512-iter=10-elite=0.1-smooth=0.1-rho=0.9-dt=0.01-steps=1200/hist.npy')[:, 1]
+    triple_pendulum_ol = jnp.load('results/CIP/TRIPLE_PENDULUM/ol/retest-seed=0-gear=25.0-beta=3.0-h=512-shots=2048-iter=3-elite=0.1-smooth=0.1-rho=0.9-dt=0.01-steps=1200/hist.npy')[:, 1]
+    humulum_ol = jnp.load('results/CIP/HUMULUM/efficient/ol/seed=1-beta=9.0-h=512-shots=1024-iter=1-elite=0.2-smooth=0.1-rho=0.9-dt=0.01-steps=1200/hist.npy')[:, 1]
 
-# name = 'SINGLE_PENDULUM-h=600-gamma=1.0-shots=512-iter=1-elite=0.1-smooth=0.1-alpha=1.0-dt=0.01'
-# sp_hist = jnp.load(name + '-hist.npy')[:1200]
+    T = humulum_ol.shape[0]
+    t = jnp.linspace(0.0, T * dt, T)
 
-# name = 'CART_POLE-h=400-gamma=1.0-shots=512-iter=1-elite=0.1-smooth=0.1-alpha=1.0-dt=0.01'
-# cp_hist = jnp.load(name + '-hist.npy')[:1200]
+    fig, ax = plt.subplots(1, 1)
+    ax.set_xlim(0.0, 12.0)
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('nats/s')
 
+    ax.plot(t, cart_pole_ol, label = 'Cart Pole')
+    ax.plot(t, double_pendulum_ol, label = 'Double Pendulum')
+    ax.plot(t, triple_pendulum_ol, label = 'Triple Pendulum')
+    ax.plot(t, humulum_ol, label = 'Gibbon')
 
-# T = jnp.arange(0.0, 1200) * dt
-
-
-# fig, ax = plt.subplots(1, 1)
-# fig.suptitle('Effectiveness of CIP for Intrinsic Control')
-# ax.plot(T, dp_hist, label = 'Double Pendulum')
-# ax.plot(T, sp_hist, label = 'Single Pendulum')
-# ax.plot(T, cp_hist, label = 'Cart Pole')
-
-# ax.set_xlabel('Time (s)')
-# ax.set_ylabel('nats/s')
-
-# leg = ax.legend(title = 'Environment')
-
-# leg.get_title().set_fontweight('bold')
-# fig.tight_layout()
-# fig.savefig('cip.png', dpi = 300)
-# plt.show()
-
-
-
-
-dt = 0.05
-
-T = jnp.arange(0.0, 600) * dt
-
-fig, ax = plt.subplots(1, 1)
-fig.suptitle('Testing CIP Surrogate on Single Pendulum With Horizon = 300')
-
-ax.set_xlabel('Time (s)')
-ax.set_ylabel('CIP Approximation (nats/s)')
-
-for i in range(1, 3 + 1):
-    hist = jnp.load(f'SINGLE_PENDULUM-h=200-shots=512-iter={i}-elite=0.1-smooth=0.1-rho=0.9-dt={dt}-hist.npy')
-    ax.plot(T, hist, label = i)
-
-ax.legend(title = 'MPC Iterations')
-fig.savefig('surrogate.png', dpi = 300)
-plt.show()
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig('rate.png', dpi = 300)
+    plt.show()
