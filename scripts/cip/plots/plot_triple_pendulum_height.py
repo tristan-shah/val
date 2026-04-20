@@ -51,8 +51,8 @@ if __name__ == '__main__':
     dyn = Dynamics('xml/triple_pendulum.xml', dt=dt)
 
     all_heights = []
-    seeds = list(range(8))
-    # seeds = [0, 1, 3, 4, 5, 6, 7]
+    # seeds = list(range(8))
+    seeds = [0, 1, 3, 4, 5, 6, 7]
     print(f'seeds: {seeds}')
 
     for seed in seeds:

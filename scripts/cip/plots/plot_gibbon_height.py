@@ -50,9 +50,9 @@ if __name__ == '__main__':
 
     all_heights = []
 
-    # seeds = [0, 1, 2, 3, 6, 7, 8, 9] ## standing
+    seeds = [0, 1, 2, 3, 6, 7, 8, 9] ## standing
     # seeds = [4, 5] ## crouching
-    seeds = list(range(10))
+    # seeds = list(range(10))
     print(seeds)
 
     # from val.cip import make_compute_cip
