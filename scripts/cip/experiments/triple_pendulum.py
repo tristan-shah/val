@@ -81,7 +81,6 @@ if __name__ == '__main__':
     xt = jnp.zeros(dyn.state_dim)
     xt = xt.at[0].set(jnp.pi)# + jax.random.normal(key, (dyn.state_dim,)) * 1e-3 ## start from bottom
     
-
     '''
     Run MPC
     '''

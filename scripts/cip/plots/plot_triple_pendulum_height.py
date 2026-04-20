@@ -96,7 +96,7 @@ if __name__ == '__main__':
     plt.fill_between(t, mean - std, mean + std, alpha=0.3)
 
     plt.xlabel('Time (s)')
-    plt.ylabel('Tip height (m)')
+    plt.ylabel('Extremity height (m)')
     plt.title('Triple pendulum')
     plt.legend()
     plt.tight_layout()

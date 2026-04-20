@@ -7,17 +7,18 @@
 #SBATCH --time=24:00:00          # Max runtime
 #SBATCH --output=slurm-%A_%a.out
 #SBATCH --error=slurm-%A_%a.err
-### #SBATCH --array=1-9
+#SBATCH --array=0-9
 
 source ~/miniforge3/etc/profile.d/conda.sh 
 conda activate val
 export PYTHONUNBUFFERED=1  # Add this
 
 ## single pendulum
-python scripts/cip/experiments/single_pendulum.py --seed 0 --component ol --horizon 1024 --shots 1024 --elite_frac 0.05 --dt 0.01 --steps 1200
+# python scripts/cip/experiments/single_pendulum.py --seed 0 --component ol --horizon 1024 --shots 1024 --elite_frac 0.05 --dt 0.01 --steps 1200
 
 ## cart pole
-# python scripts/cip/experiments/cart_pole.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 512 --shots 1024
+# python scripts/cip/experiments/cart_pole.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 512 --shots 1024 --iterations 1
+python scripts/cip/experiments/cart_pole.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 400 --shots 512 --iterations 1
 
 ## double pendulum
 # python scripts/cip/experiments/double_pendulum.py --seed 0 --component ol
