@@ -21,6 +21,7 @@ if __name__ == '__main__':
     parser.add_argument('--shots', type = int, default = 2048)
     parser.add_argument('--gear', type = float, default = 25)
     parser.add_argument('--iterations', type = int, default = 2)
+    parser.add_argument('--elite_frac', type = float, default = 0.1)
     parser.add_argument('--steps', type = int, default = 1200)
     parser.add_argument('--beta', type = float, default = 2.5)
     args = parser.parse_args()
@@ -35,7 +36,7 @@ if __name__ == '__main__':
     shots = args.shots
     steps = args.steps
     iterations = args.iterations
-    elite_frac = 0.1
+    elite_frac = args.elite_frac
     smoothing = 0.1
     rho = 0.9
     beta = args.beta

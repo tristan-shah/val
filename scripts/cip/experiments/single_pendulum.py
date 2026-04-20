@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
-# import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-# os.environ['MUJOCO_GL'] = 'egl'
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
 import jax
@@ -14,14 +14,16 @@ from val.cip import make_compute_cip
 
 if __name__ == '__main__':
     parser = ArgumentParser()
+    parser.add_argument('--dt', type = float, default = 0.05)
     parser.add_argument('--seed', type = int, default = 0)
     parser.add_argument('--component', type = str, default = 'ol')
     parser.add_argument('--horizon', type = int, default = 150)
     parser.add_argument('--shots', type = int, default = 512)
     parser.add_argument('--iterations', type = int, default = 1)
     parser.add_argument('--elite_frac', type = float, default = 0.1)
-    parser.add_argument('--steps', type = int, default = 300)
+    parser.add_argument('--steps', type = int, default = 1200)
     parser.add_argument('--beta', type = float, default = 0.0)
+    parser.add_argument('--rho', type = float, default = 0.9)
     args = parser.parse_args()
 
     seed = args.seed
@@ -29,14 +31,14 @@ if __name__ == '__main__':
 
     component = args.component
 
-    dt = 0.05
+    dt = args.dt
     horizon = args.horizon
     shots = args.shots
     steps = args.steps
     iterations = args.iterations
     elite_frac = args.elite_frac
     smoothing = 0.1
-    rho = 0.9
+    rho = args.rho
     beta = args.beta
     
     name = f'seed={seed}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
@@ -48,7 +50,6 @@ if __name__ == '__main__':
     dyn = Dynamics('xml/pendulum.xml', dt = dt)
     print(f'State Dim {dyn.state_dim}, Control Dim {dyn.control_dim}')
     step = make_step(dyn)
-
 
     ## function for computing cip
     compute_cip = make_compute_cip(dyn, component)
@@ -90,7 +91,6 @@ if __name__ == '__main__':
 
         key, subkey = jax.random.split(key)
         ut, J, info, U = mpc(xt, subkey)
-
 
         xt = step(xt, ut)
         print(t, xt, ut, J)

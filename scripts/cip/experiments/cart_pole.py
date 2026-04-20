@@ -9,10 +9,9 @@ from jax import Array
 from jax import numpy as jnp
 import matplotlib.pyplot as plt
 
-from val import Dynamics, make_step, make_unroll
+from val import Dynamics, make_step
 from val.cem import CEM
 from val.cip import make_compute_cip
-from val.info import make_compute_rate
 
 
 if __name__ == '__main__':
@@ -21,44 +20,51 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type = int, default = 0)
     parser.add_argument('--component', type = str, default = 'ol')
     parser.add_argument('--horizon', type = int, default = 400)
+    parser.add_argument('--shots', type = int, default = 512)
+    parser.add_argument('--iterations', type = int, default = 1)
+    parser.add_argument('--elite_frac', type = float, default = 0.1)
+    parser.add_argument('--steps', type = int, default = 1200)
+    parser.add_argument('--beta', type = float, default = 0.0)
     args = parser.parse_args()
 
     seed = args.seed
     key = jax.random.PRNGKey(seed)
-    component = args.component #'ol'
+    component = args.component
 
     dt = 0.01
     horizon = args.horizon
-    shots = 512
-    steps = 1200
-
-    iterations = 1
-    elite_frac = 0.1
+    shots = args.shots
+    steps = args.steps
+    iterations = args.iterations
+    elite_frac = args.elite_frac
     smoothing = 0.1
     alpha = 1.0
     rho = 0.9
-    gamma = 1.0
+    beta = args.beta
 
-    name = f'seed={seed}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}'
-    # root = Path(f'results/CIP/CART_POLE/{component}')
-    root = Path(f'results/CIP/CART_POLE/exponential_domain/{component}')
-    # root = Path(f'results/CIP/CART_POLE/experimental/{component}')
+    name = f'seed={seed}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
+    root = Path(f'results/CART_POLE/{component}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 
     ## initialize dynamics
     dyn = Dynamics('xml/cart_pole.xml', dt = dt)
     step = make_step(dyn)
-    unroll = make_unroll(step)
 
-    # compute_cip = make_compute_cip(dyn)
-    # batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
-    batch_compute_cip = make_compute_rate(dyn, component = component)
+    compute_cip = make_compute_cip(dyn)
+
+    def objective(xt, U):
+        J, info = compute_cip(xt, U)
+        control_penalty = jnp.mean(jnp.sum(U ** 2, axis = 1))
+        info['control_penalty'] = control_penalty
+        return J - beta * control_penalty, info
+
+    batch_objective = jax.jit(jax.vmap(objective, in_axes = (None, 0)))
 
     ## initialize agent
     mpc = CEM(
         dyn,
-        batch_compute_cip,
+        batch_objective,
         shots, 
         horizon, 
         iterations, 
@@ -77,18 +83,7 @@ if __name__ == '__main__':
 
     for t in range(steps):
         key, subkey = jax.random.split(key)
-        # ut, J, info = mpc(xt, subkey)
-
         ut, J, info, U = mpc(xt, subkey)
-
-        # fig, ax = plt.subplots(1, 1)
-        # ax.plot(U[:, :, 0].T, alpha = 0.1, color = 'blue')
-        # ax.set_xlabel('Planning Horizon')
-        # ax.set_ylabel('Control')
-        # ax.set_ylim(-1.1, 1.1)
-        # fig.tight_layout()
-        # fig.savefig(f'controls_{t}.png', dpi = 300)
-        # plt.close(fig)
 
         xt = step(xt, ut)
         print(t, xt, ut, J)
