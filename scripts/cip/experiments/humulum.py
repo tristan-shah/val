@@ -8,9 +8,9 @@ import jax
 from jax import numpy as jnp
 import matplotlib.pyplot as plt
 
-from val import Dynamics, make_step, make_unroll
+from val import Dynamics, make_step
 from val.cem import CEM
-from val.cip import make_compute_cip, make_compute_entropy
+from val.cip import make_compute_cip
 
 if __name__ == '__main__':
 
@@ -23,6 +23,7 @@ if __name__ == '__main__':
     parser.add_argument('--elite_frac', type = float, default = 0.1)
     parser.add_argument('--steps', type = int, default = 1200)
     parser.add_argument('--beta', type = float, default = 9.0)
+    parser.add_argument('--warmstart', type = int, default = 10)
     args = parser.parse_args()
 
     seed = args.seed
@@ -39,8 +40,9 @@ if __name__ == '__main__':
     smoothing = 0.1
     rho = 0.9
     beta = args.beta
+    warmstart = args.warmstart
 
-    name = f'seed={seed}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
+    name = f'seed={seed}-warmstart={warmstart}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
     root = Path(f'results/HUMULUM/efficient/{component}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
@@ -77,7 +79,7 @@ if __name__ == '__main__':
     xt = jnp.load('hanging.npy')
 
     ## warmstart
-    for i in range(10):
+    for i in range(args.warmstart):
         key, subkey = jax.random.split(key)
         ut, J, info, U = mpc(xt, subkey, roll = False)
         print(i, J)

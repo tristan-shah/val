@@ -8,10 +8,9 @@ import jax
 from jax import numpy as jnp
 import matplotlib.pyplot as plt
 
-from val import Dynamics, make_step, make_unroll
+from val import Dynamics, make_step
 from val.cem import CEM
 from val.cip import make_compute_cip
-from val.info import make_compute_rate
 
 if __name__ == '__main__':
 
@@ -43,13 +42,11 @@ if __name__ == '__main__':
 
     name = f'retest-seed={seed}-gear={args.gear}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
     root = Path(f'results/TRIPLE_PENDULUM/{component}')
-    # root = Path(f'results/HOPPER/{component}')
 
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 
     dyn = Dynamics('xml/triple_pendulum.xml', dt = dt)
-    # dyn = Dynamics('xml/unrestricted_hopper.xml', dt = dt)
 
     ## override default gear strength
     dyn.mjx_model = dyn.mjx_model.replace(
@@ -59,7 +56,6 @@ if __name__ == '__main__':
     step = make_step(dyn)
 
     compute_cip = make_compute_cip(dyn, component)
-    # batch_compute_cip = jax.jit(jax.vmap(compute_cip, in_axes = (None, 0)))
 
     def objective(xt, U):
         J, info = compute_cip(xt, U)
@@ -82,12 +78,7 @@ if __name__ == '__main__':
         rho)
 
     xt = jnp.zeros(dyn.state_dim)
-    xt = xt.at[0].set(jnp.pi) + jax.random.normal(key, (dyn.state_dim,)) * 1e-3 ## start from bottom
-
-
-
-
-
+    xt = xt.at[0].set(jnp.pi)# + jax.random.normal(key, (dyn.state_dim,)) * 1e-3 ## start from bottom
     
 
     '''
