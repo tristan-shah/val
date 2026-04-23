@@ -18,15 +18,13 @@ export PYTHONUNBUFFERED=1  # Add this
 
 ## cart pole
 # python scripts/cip/experiments/cart_pole.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 512 --shots 1024 --iterations 1
-python scripts/cip/experiments/cart_pole.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 400 --shots 512 --iterations 1
+# python scripts/cip/experiments/cart_pole.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 400 --shots 512 --iterations 1
 
 ## double pendulum
-# python scripts/cip/experiments/double_pendulum.py --seed 0 --component ol
+# python scripts/cip/experiments/double_pendulum.py --seed $SLURM_ARRAY_TASK_ID --component ol --shots 1024 --steps 2400
 
 ## triple pendulum
-# python scripts/cip/experiments/triple_pendulum.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 128 --shots 2048 --gear 25 --iterations 2 --beta 2.5
-# python scripts/cip/experiments/triple_pendulum.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 512 --shots 2048 --gear 25 --iterations 2 --beta 3.5
-# python scripts/cip/experiments/triple_pendulum.py --seed 0 --component ol --horizon 512 --shots 2048 --gear 25 --iterations 10 --beta 3.0 --elite_frac 0.1
+python scripts/cip/experiments/triple_pendulum.py --seed $SLURM_ARRAY_TASK_ID --component ol --horizon 128 --shots 2048 --gear 25 --iterations 10 --beta 2.5 --steps 2400
 
 ## humulum
 # python scripts/cip/experiments/humulum.py --component ol --seed $SLURM_ARRAY_TASK_ID --beta 9.0 --horizon 512 --shots 1024 --iterations 1 --elite_frac 0.2 --warmstart 10
