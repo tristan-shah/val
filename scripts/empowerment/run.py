@@ -20,6 +20,14 @@ def render_double_pendulum(dyn: Dynamics, X: Array, path: Path):
     dyn.render(X, path = path / 'vid.mp4', distance = 5.0, skip = 2, lookat = jnp.array([0, 0, 2.2]))
     return None
 
+def render_triple_pendulum(dyn: Dynamics, X: Array, path: Path):
+    dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 5)
+    return None
+
+def render_humulum(dyn: Dynamics, X: Array, path: Path):
+    dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 5, lookat = jnp.array([0.0, 0.0, 0.0]))
+    return None
+
 params = {
     'SINGLE_PENDULUM': {
         'horizon': 150,
@@ -37,10 +45,29 @@ params = {
     },
     'DOUBLE_PENDULUM': {
         'horizon': 500,
-        'steps': 3000, #1200,
+        'steps': 1200,
         'dt': 0.01,
         'xml_path': 'xml/double_pendulum.xml',
         'render': render_double_pendulum
+    },
+    'TRIPLE_PENDULUM': {
+        'horizon': 128, #500,
+        'steps': 2000,
+        'dt': 0.01,
+        'xml_path': 'xml/triple_pendulum.xml',
+        'render': render_triple_pendulum,
+        'init': lambda dyn: jnp.zeros(dyn.state_dim).at[0].set(jnp.pi),
+        'setup': lambda dyn: dyn.mjx_model.replace(
+            actuator_gear = dyn.mjx_model.actuator_gear.at[:, 0].set(25)
+        )
+    },
+    'HUMULUM': {
+        'horizon': 500,
+        'steps': 1200,
+        'dt': 0.01,
+        'xml_path': 'xml/humulum.xml',
+        'render': render_humulum,
+        'init': lambda dyn: jnp.load('hanging.npy')
     }
 }
 
@@ -49,7 +76,10 @@ if __name__ == '__main__':
 
     # task = 'SINGLE_PENDULUM'
     # task = 'CART_POLE'
-    task = 'DOUBLE_PENDULUM'
+    # task = 'DOUBLE_PENDULUM'
+    task = 'TRIPLE_PENDULUM'
+    # task = 'HUMULUM'
+
 
     horizon = params[task]['horizon']
     P = params[task]['horizon']
@@ -62,6 +92,8 @@ if __name__ == '__main__':
     path.mkdir(parents = True, exist_ok = True)
 
     dyn = Dynamics(path = params[task]['xml_path'], dt = params[task]['dt'])
+    if 'setup' in params[task]:
+        dyn.mjx_model = params[task]['setup'](dyn)
     print(f'Timestep = {dt}')
     print(f'Horizon = {horizon}')
 
@@ -69,7 +101,10 @@ if __name__ == '__main__':
     step = make_step(dyn)
 
     ## initialize state
-    xt = dyn.init_state()
+    if 'init' in params[task]:
+        xt = params[task]['init'](dyn)
+    else:
+        xt = dyn.init_state()
 
     ## tensor for state storage
     X = jnp.zeros((steps + 1, dyn.state_dim))
