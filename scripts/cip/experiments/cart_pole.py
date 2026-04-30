@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-os.environ['MUJOCO_GL'] = 'egl'
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
 import jax
@@ -42,7 +42,7 @@ if __name__ == '__main__':
     rho = 0.9
     beta = args.beta
 
-    name = f'seed={seed}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
+    name = f'TEST/seed={seed}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
     root = Path(f'results/CART_POLE/{component}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
@@ -51,7 +51,7 @@ if __name__ == '__main__':
     dyn = Dynamics('xml/cart_pole.xml', dt = dt)
     step = make_step(dyn)
 
-    compute_cip = make_compute_cip(dyn)
+    compute_cip = make_compute_cip(dyn, component)
 
     def objective(xt, U):
         J, info = compute_cip(xt, U)

@@ -304,24 +304,10 @@ if __name__ == '__main__':
     })
 
     BASELINE_COLORS = {
-        'Empowerment': 'C0',
+        'Empowerment': 'black',
         'DADS':        'C2',
         'DIAYN':       'C1',
         'SMM':         'C4',
-    }
-
-    BASELINE_STYLES = {
-        'Empowerment': '-',
-        'DADS':        '--',
-        'DIAYN':       '-',
-        'SMM':         '-',
-    }
-
-    BASELINE_ZORDER = {
-        'Empowerment': 2,
-        'DADS':        2.5,
-        'DIAYN':       2,
-        'SMM':         2,
     }
 
     fig, axes = plt.subplots(1, 4, figsize=(7.0, 1.8))
@@ -349,7 +335,7 @@ if __name__ == '__main__':
                 bl_h = np.array(cfg['heights_fn'](bl_X, dyn.model, dyn.nq))[:xlim_steps]
                 bl_normed = (bl_h - min_h) / (max_h - min_h)
                 bl_t = np.arange(bl_normed.shape[0]) * cfg['dt']
-                ax.plot(bl_t, bl_normed, label=bl['label'], color=BASELINE_COLORS.get(bl['label'], 'gray'), linestyle=BASELINE_STYLES.get(bl['label'], '-'), zorder=BASELINE_ZORDER.get(bl['label'], 2))
+                ax.plot(bl_t, bl_normed, label=bl['label'], color='black', linestyle='-')
             else:
                 p = Path(bl['path'])
                 if not p.exists():
@@ -361,13 +347,12 @@ if __name__ == '__main__':
                 bl_mean    = bl_normed.mean(axis=0)
                 bl_std     = bl_normed.std(axis=0)
                 bl_t       = np.arange(bl_normed.shape[1]) * cfg['dt']
-                zo = BASELINE_ZORDER.get(bl['label'], 2)
-                ax.plot(bl_t, bl_mean, label=bl['label'], color=color, linestyle=BASELINE_STYLES.get(bl['label'], '-'), zorder=zo)
+                ax.plot(bl_t, bl_mean, label=bl['label'], color=color)
                 if not bl.get('deterministic', False):
-                    ax.fill_between(bl_t, bl_mean - bl_std, bl_mean + bl_std, alpha=0.2, color=color, zorder=zo)
+                    ax.fill_between(bl_t, bl_mean - bl_std, bl_mean + bl_std, alpha=0.3, color=color)
 
-        ax.plot(t, mean, label='CIP (ours)', color='black', zorder=3)
-        ax.fill_between(t, mean - std, mean + std, alpha=0.2, color='black', zorder=3)
+        ax.plot(t, mean, label='CIP (ours)', color='C0', zorder=3)
+        ax.fill_between(t, mean - std, mean + std, alpha=0.3, color='C0', zorder=3)
 
         ax.set_title(cfg['title'])
         ax.set_xlabel('Time (s)')

@@ -125,7 +125,7 @@ def make_compute_entropy_efficient(step: callable):
     return jax.jit(compute_entropy)
 
 
-def make_compute_cip(dyn: Dynamics, component: str = 'cip'):
+def make_compute_cip(dyn: Dynamics, component: str = 'ol'):
 
     assert component in ['cip', 'ol', 'cl']
 
