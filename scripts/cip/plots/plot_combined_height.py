@@ -130,6 +130,7 @@ ENVS = [
             dict(label='DADS',  path='results/DADS/CART_POLE/best_skill_seeds.npy'),
             dict(label='DIAYN', path='results/DIAYN/CART_POLE/extremity_height_cart_pole_diayn_1.npy'),
             dict(label='SMM',   path='results/SMM/CART_POLE/extremity_height_cart_pole_smm_1.npy'),
+            dict(label='ICM',   path='results/ICM/CART_POLE/extremity_height_cart_pole_icm_1.npy'),
         ],
     ),
     dict(
@@ -148,6 +149,7 @@ ENVS = [
             dict(label='DADS',  path='results/DADS/DOUBLE_PENDULUM/best_skill_seeds.npy'),
             dict(label='DIAYN', path='results/DIAYN/DOUBLE_PENDULUM/extremity_height_double_pendulum_diayn_1.npy'),
             dict(label='SMM',   path='results/SMM/DOUBLE_PENDULUM/extremity_height_double_pendulum_smm_1.npy'),
+            dict(label='ICM',   path='results/ICM/DOUBLE_PENDULUM/extremity_height_double_pendulum_icm_1.npy'),
         ],
     ),
     dict(
@@ -163,9 +165,10 @@ ENVS = [
         max_fn     = triple_pendulum_max_tip_height,
         baselines  = [
             dict(label='Empowerment', traj_path='results/empowerment/TRIPLE_PENDULUM/h=128-dt=0.01/traj.npy', deterministic=True),
-            # dict(label='DADS',  path='results/DADS/TRIPLE_PENDULUM/best_skill_seeds.npy'),
-            dict(label='DIAYN', path='results/DIAYN/TRIPLE_PENDULUM/extremity_height_diayn_1.npy'),
-            dict(label='SMM',   path='results/SMM/TRIPLE_PENDULUM/extremity_height_smm_1.npy'),
+            dict(label='DADS',  path='results/DADS/TRIPLE_PENDULUM/best_skill_seeds.npy'),
+            dict(label='DIAYN', path='results/DIAYN/TRIPLE_PENDULUM/extremity_height_triple_pendulum_diayn_1.npy'),
+            dict(label='SMM',   path='results/SMM/TRIPLE_PENDULUM/extremity_height_triple_pendulum_smm_1.npy'),
+            dict(label='ICM',   path='results/ICM/TRIPLE_PENDULUM/extremity_height_triple_pendulum_icm_1.npy')
         ],
     ),
     dict(
@@ -183,6 +186,7 @@ ENVS = [
             dict(label='DADS',  path='results/DADS/HUMULUM/best_skill_seeds.npy'),
             dict(label='DIAYN', path='results/DIAYN/HUMULUM/best_skill_seeds_diayn_1.npy'),
             dict(label='SMM',   path='results/SMM/HUMULUM/best_skill_seeds_smm_1.npy'),
+            dict(label='ICM',   path='results/ICM/HUMULUM/extremity_height_humulum_icm_1.npy')
         ],
     ),
 ]
@@ -219,7 +223,7 @@ if __name__ == '__main__':
     # -----------------------------------------------------------------------
     # Last-10% table
     # -----------------------------------------------------------------------
-    COLUMNS = ['CIP (ours)', 'Empowerment', 'DIAYN', 'DADS', 'SMM']
+    COLUMNS = ['CIP (ours)', 'Empowerment', 'DIAYN', 'DADS', 'SMM', 'ICM']
     COL_W   = 13
 
     def last10(arr_1d):
@@ -308,6 +312,7 @@ if __name__ == '__main__':
         'DADS':        'C2',
         'DIAYN':       'C1',
         'SMM':         'C4',
+        'ICM':         'C5',
     }
 
     BASELINE_STYLES = {
@@ -315,6 +320,7 @@ if __name__ == '__main__':
         'DADS':        '--',
         'DIAYN':       '-',
         'SMM':         '-',
+        'ICM':         '-',
     }
 
     BASELINE_ZORDER = {
@@ -322,6 +328,7 @@ if __name__ == '__main__':
         'DADS':        2.5,
         'DIAYN':       2,
         'SMM':         2,
+        'ICM':         2,
     }
 
     fig, axes = plt.subplots(1, 4, figsize=(7.0, 1.8))

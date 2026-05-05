@@ -76,7 +76,7 @@ if __name__ == '__main__':
         rho)
 
     ## load in hanging pose
-    xt = jnp.load('hanging.npy')
+    xt = jnp.load('xml/hanging.npy')
 
     ## warmstart
     for i in range(args.warmstart):

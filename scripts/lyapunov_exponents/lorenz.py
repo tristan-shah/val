@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from val import make_unroll
+from val.info import compute_volume
 
 def make_lorenz_f(sigma: float = 10, rho: float = 28, beta: float = 8/3):
         
@@ -133,14 +134,13 @@ def inverse_method(fx: Array, dt: float):
     dx = fx.shape[-1]
     I = jnp.eye(dx)
 
-    O = I
+    O = I * 1e-3
     y = jnp.array(0.0)
 
     hist = jnp.zeros(horizon)
 
     for t in reversed(range(horizon)):
         y = y + jnp.linalg.slogdet(O + fx[t] @ fx[t].T).logabsdet
-        # y = y + jnp.linalg.slogdet(I + fx[t] @ fx[t].T).logabsdet
         O = I - fx[t].T @ jnp.linalg.inv(O + fx[t] @ fx[t].T) @ fx[t]
         hist = hist.at[t].set(y)
 
@@ -150,7 +150,8 @@ def inverse_method(fx: Array, dt: float):
 
 if __name__ == '__main__':
 
-    horizon = 50000
+    known_kse = 0.906
+    horizon = 20000 #50000
     dt = 0.02
     
     step = make_rk4_step(make_lorenz_f(), dt = dt)
@@ -163,7 +164,11 @@ if __name__ == '__main__':
     X = unroll(xt, U)
 
     fx = linearize(X[:-1], U)
+    fu = jnp.zeros((horizon, 3, 1))
 
+    Y, _, _, _ = compute_volume(fx, fu, 1.0, 1.0)
+    T = jnp.arange(1, horizon + 1)
+    ol_entropy_unstable = jnp.linalg.slogdet(Y).logabsdet / (2 * jnp.flip(T) * dt)
 
     hist = inverse_method(fx, dt)
     print(hist)
@@ -172,19 +177,20 @@ if __name__ == '__main__':
     print(LE)
 
     fig, ax = plt.subplots(1, 1)
-    ax.set_ylim(0.0, 1.4)
+    ax.set_ylim(0.0, 3.0)
     ax.set_xlabel('Iteration Timestep')
-    ax.set_ylabel('KSE')
-    ax.set_title('Lorenz Attractor\nSum of Positve Lyapunov Exponents')
-    
+    ax.set_ylabel('nats / s')
+    ax.set_title('Lorenz Attractor\n Kolmogorov-Sinai Entropy')
+
     ax.plot(LE.clip(min = 0.0).sum(axis = 1), label = 'Gram Schmidt LE')
     ax.plot(jnp.flip(hist), label = 'CIP Log Domain')
+    ax.plot(jnp.flip(ol_entropy_unstable), label = 'CIP Unstable')
+    ax.hlines(known_kse, xmin = 0, xmax = horizon, label = 'Known', color = 'red', linestyles = 'dashed')
 
     ax.legend()
     fig.savefig('Lorenz.png', dpi = 300)
     plt.show()
 
-    error = jnp.flip(hist) - LE.clip(min = 0.0).sum(axis = 1)
-
-    print(jnp.mean(jnp.square(error[25000:])))
+    # error = jnp.flip(hist) - LE.clip(min = 0.0).sum(axis = 1)
+    # print(jnp.mean(jnp.square(error[25000:])))
     # plot_lorenz_3d(X)
