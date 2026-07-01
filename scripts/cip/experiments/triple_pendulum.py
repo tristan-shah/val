@@ -20,6 +20,7 @@ if __name__ == '__main__':
     parser.add_argument('--horizon', type = int, default = 128)
     parser.add_argument('--shots', type = int, default = 2048)
     parser.add_argument('--gear', type = float, default = 25)
+    parser.add_argument('--damping', type = float, default = None)
     parser.add_argument('--iterations', type = int, default = 2)
     parser.add_argument('--elite_frac', type = float, default = 0.1)
     parser.add_argument('--steps', type = int, default = 1200)
@@ -41,7 +42,7 @@ if __name__ == '__main__':
     rho = 0.9
     beta = args.beta
 
-    name = f'retest-seed={seed}-gear={args.gear}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
+    name = f'retest-seed={seed}-gear={args.gear}-damp={args.damping}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
     root = Path(f'results/TRIPLE_PENDULUM/{component}')
 
     path = root / name
@@ -53,6 +54,14 @@ if __name__ == '__main__':
     dyn.mjx_model = dyn.mjx_model.replace(
         actuator_gear = dyn.mjx_model.actuator_gear.at[:, 0].set(args.gear)
     )
+
+    if args.damping is not None:
+        dyn.mjx_model = dyn.mjx_model.replace(
+            dof_damping = dyn.mjx_model.dof_damping.at[:].set(args.damping)
+        )
+
+    print(dyn.mjx_model.actuator_gear)
+    print(dyn.mjx_model.dof_damping)
 
     step = make_step(dyn)
 
