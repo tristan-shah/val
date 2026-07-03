@@ -1,0 +1,32 @@
+# W&B grid sweep over the triple pendulum, optimizing pendulum tip height.
+# gear and damping are fixed; the 5 remaining knobs form a 2^5 = 32-run grid.
+#
+#   wandb sweep scripts/cip/experiments/height_sweep.yaml
+#   wandb agent <ENTITY>/triple-pendulum-height/<SWEEP_ID>
+#
+program: scripts/cip/experiments/triple_pendulum_wandb.py
+method: grid
+metric:
+  name: height_last10
+  goal: maximize
+
+# Invoke the program with NO extra CLI args; hyperparameters are delivered
+# through wandb.config (the program reads them from there).
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+
+parameters:
+  # fixed
+  gear:       {value: 25.0}
+  damping:    {value: 3.5}
+  steps:      {value: 1200}
+  seed:       {value: 0}
+  component:  {value: ol}
+  # swept (32 combinations)
+  horizon:    {values: [128, 512]}
+  shots:      {values: [512, 2048]}
+  iterations: {values: [1, 10]}
+  elite_frac: {values: [0.1, 0.2]}
+  beta:       {values: [0.0, 2.5]}
