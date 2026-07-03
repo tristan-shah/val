@@ -1,7 +1,8 @@
 from argparse import ArgumentParser
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = '0'
-# os.environ['MUJOCO_GL'] = 'egl'
+os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+os.environ['MUJOCO_GL'] = 'egl'
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 from pathlib import Path
 
 import jax
@@ -21,7 +22,7 @@ if __name__ == '__main__':
     parser.add_argument('--shots', type = int, default = 2048)
     parser.add_argument('--gear', type = float, default = 25)
     parser.add_argument('--damping', type = float, default = None)
-    parser.add_argument('--iterations', type = int, default = 2)
+    parser.add_argument('--iterations', type = int, default = 10)
     parser.add_argument('--elite_frac', type = float, default = 0.1)
     parser.add_argument('--steps', type = int, default = 1200)
     parser.add_argument('--beta', type = float, default = 2.5)

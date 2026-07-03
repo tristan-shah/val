@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = '0'
-# os.environ['MUJOCO_GL'] = 'egl'
+os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
 import jax
@@ -17,10 +17,9 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--seed', type = int, default = 0)
     parser.add_argument('--component', type = str, default = 'ol')
-    parser.add_argument('--horizon', type = int, default = 256)
-    parser.add_argument('--shots', type = int, default = 2048)
-    parser.add_argument('--gear', type = float, default = 25)
-    parser.add_argument('--iterations', type = int, default = 2)
+    parser.add_argument('--horizon', type = int, default = 128)
+    parser.add_argument('--shots', type = int, default = 1024)
+    parser.add_argument('--iterations', type = int, default = 1)
     parser.add_argument('--elite_frac', type = float, default = 0.1)
     parser.add_argument('--steps', type = int, default = 1200)
     parser.add_argument('--beta', type = float, default = 2.5)
@@ -41,18 +40,13 @@ if __name__ == '__main__':
     rho = 0.9
     beta = args.beta
 
-    name = f'seed={seed}-gear={args.gear}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
+    name = f'seed={seed}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
     root = Path(f'results/HOPPER/{component}')
 
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 
     dyn = Dynamics('xml/hopper_dm_control.xml', dt = dt)
-
-    ## override default gear strength
-    dyn.mjx_model = dyn.mjx_model.replace(
-        actuator_gear = dyn.mjx_model.actuator_gear.at[:, 0].set(args.gear)
-    )
 
     step = make_step(dyn)
 
@@ -118,5 +112,4 @@ if __name__ == '__main__':
     fig.savefig(path / 'metrics.png', dpi = 300)
     plt.show()
 
-    # dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 5)
-    dyn.render(X, path = 'vid.mp4', skip = 1, distance = 4.0, lookat = [3.0, 0.0, 0.7], elevation = -10)
+    dyn.render(X, path = path / 'vid.mp4', skip = 1,  distance = 4.0, lookat = [3.0, 0.0, 0.7], elevation = -10)
