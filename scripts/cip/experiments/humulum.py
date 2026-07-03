@@ -1,7 +1,8 @@
 from argparse import ArgumentParser
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ['MUJOCO_GL'] = 'egl'
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 from pathlib import Path
 
 import jax
@@ -18,9 +19,11 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type = int, default = 0)
     parser.add_argument('--component', type = str, default = 'ol')
     parser.add_argument('--horizon', type = int, default = 512)
-    parser.add_argument('--shots', type = int, default = 256)
+    parser.add_argument('--shots', type = int, default = 1024)
+    parser.add_argument('--gear', type = float, default = None)
+    parser.add_argument('--damping', type = float, default = None)
     parser.add_argument('--iterations', type = int, default = 1)
-    parser.add_argument('--elite_frac', type = float, default = 0.1)
+    parser.add_argument('--elite_frac', type = float, default = 0.2)
     parser.add_argument('--steps', type = int, default = 1200)
     parser.add_argument('--beta', type = float, default = 9.0)
     parser.add_argument('--warmstart', type = int, default = 10)
@@ -42,13 +45,26 @@ if __name__ == '__main__':
     beta = args.beta
     warmstart = args.warmstart
 
-    name = f'seed={seed}-warmstart={warmstart}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
+    name = f'seed={seed}-gear={args.gear}-damp={args.damping}-warmstart={warmstart}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
     root = Path(f'results/HUMULUM/efficient/{component}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 
     dyn = Dynamics('xml/humulum.xml', dt = dt)
     print(f'State Dim {dyn.state_dim}, Control Dim {dyn.control_dim}')
+
+    if args.gear is not None:
+        ## override default gear strength
+        dyn.mjx_model = dyn.mjx_model.replace(
+            actuator_gear = dyn.mjx_model.actuator_gear.at[:, 0].set(args.gear)
+        )
+
+    if args.damping is not None:
+        dyn.mjx_model = dyn.mjx_model.replace(
+            dof_damping = dyn.mjx_model.dof_damping.at[:].set(args.damping)
+        )
+
+
     step = make_step(dyn)
 
     '''
@@ -77,6 +93,15 @@ if __name__ == '__main__':
 
     ## load in hanging pose
     xt = jnp.load('xml/hanging.npy')
+
+    ut = jnp.zeros(dyn.control_dim)
+
+    linearize = jax.jacfwd(step)
+    fx = linearize(xt, ut)
+
+    print(fx.min(), fx.max())
+
+
 
     ## warmstart
     for i in range(args.warmstart):
