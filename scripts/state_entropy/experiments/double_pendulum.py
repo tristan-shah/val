@@ -19,10 +19,10 @@ if __name__ == '__main__':
     parser.add_argument('--k', type = int, default = 12)
     parser.add_argument('--subsample', type = int, default = 1)
     parser.add_argument('--horizon', type = int, default = 512)
-    parser.add_argument('--shots', type = int, default = 512)
+    parser.add_argument('--shots', type = int, default = 1024)
     parser.add_argument('--iterations', type = int, default = 10)
     parser.add_argument('--elite_frac', type = float, default = 0.1)
-    parser.add_argument('--steps', type = int, default = 1200)
+    parser.add_argument('--steps', type = int, default = 2000)
     parser.add_argument('--beta', type = float, default = 0.0)
     args = parser.parse_args()
 

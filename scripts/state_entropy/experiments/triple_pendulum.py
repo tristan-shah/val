@@ -25,7 +25,7 @@ if __name__ == '__main__':
     parser.add_argument('--damping', type = float, default = None)
     parser.add_argument('--iterations', type = int, default = 10)
     parser.add_argument('--elite_frac', type = float, default = 0.1)
-    parser.add_argument('--steps', type = int, default = 1200)
+    parser.add_argument('--steps', type = int, default = 2000)
     parser.add_argument('--beta', type = float, default = 2.5)
     args = parser.parse_args()
 
