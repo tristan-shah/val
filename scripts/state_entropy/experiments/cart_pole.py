@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-# os.environ['MUJOCO_GL'] = 'egl'
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ['MUJOCO_GL'] = 'egl'
 from pathlib import Path
 
 import jax
@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 from val import Dynamics, make_step
 from val.cem import CEM
 from entropy_objective import make_compute_state_entropy
-
 
 if __name__ == '__main__':
 

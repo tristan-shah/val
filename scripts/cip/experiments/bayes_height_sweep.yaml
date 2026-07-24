@@ -1,9 +1,11 @@
-# Bayesian optimization of triple-pendulum tip height.
+# W&B Bayesian sweep over the triple pendulum, optimizing pendulum tip height.
 #
-# Usage:
+# Create the sweep:
 #   wandb sweep scripts/cip/experiments/height_sweep.yaml
-#   wandb agent <ENTITY>/val-scripts_cip_experiments/<SWEEP_ID>
 #
+# Launch one or more agents:
+#   wandb agent <ENTITY>/val-scripts_cip_experiments/<SWEEP_ID>
+
 program: scripts/cip/experiments/triple_pendulum_wandb.py
 
 method: bayes
@@ -11,10 +13,6 @@ method: bayes
 metric:
   name: height_last10
   goal: maximize
-
-# Stop after this many evaluations.
-# Increase if you have more compute.
-run_cap: 60
 
 command:
   - ${env}
@@ -38,7 +36,7 @@ parameters:
   component:
     value: ol
 
-  # Discrete search space
+  # Discrete parameters
   horizon:
     values:
       - 128
@@ -57,7 +55,7 @@ parameters:
       - 5
       - 10
 
-  # Continuous search space
+  # Continuous parameters
   elite_frac:
     distribution: uniform
     min: 0.05
