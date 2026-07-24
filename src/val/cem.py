@@ -20,8 +20,13 @@ class CEM:
         assert 0.0 < elite_frac <= 1.0
 
         ## actuator ranges
-        self.low = dyn.mjx_model.actuator_ctrlrange[:, 0]
-        self.high = dyn.mjx_model.actuator_ctrlrange[:, 1]
+        ## mujoco Dynamics exposes ranges via its mjx_model; custom envs (e.g. BallInBox)
+        ## expose plain low/high arrays instead. Existing experiments hit the first branch.
+        if hasattr(dyn, 'mjx_model'):
+            self.low = dyn.mjx_model.actuator_ctrlrange[:, 0]
+            self.high = dyn.mjx_model.actuator_ctrlrange[:, 1]
+        else:
+            self.low, self.high = dyn.low, dyn.high
 
         ## objective function
         self.objective = objective

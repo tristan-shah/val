@@ -166,12 +166,53 @@ def make_compute_cip(dyn: Dynamics, component: str = 'ol'):
         info = {'cip': cip, 'ol': ol, 'cl': cl}
 
         if component == 'cip':
-            return cip, info 
+            return cip, info
         elif component == 'ol':
             return ol, info
         elif component == 'cl':
             return -cl, info
-    
+
+    return jax.jit(compute_cip)
+
+
+def make_compute_cip_from_step(step: callable, dt: float, component: str = 'ol'):
+    '''
+    Same CIP objective as `make_compute_cip`, but built from a plain jax `step`
+    callable and an explicit `dt` rather than a mujoco `Dynamics`. Lets custom
+    environments (e.g. BallInBox) reuse the entropy machinery unchanged.
+    Returns `(J, info)` with `info = {'cip', 'ol', 'cl'}`, matching `make_compute_cip`.
+    '''
+
+    assert component in ['cip', 'ol', 'cl']
+
+    unroll = make_unroll(step)
+    compute_entropy_efficient = make_compute_entropy_efficient(step)
+
+    def compute_cip(xt: Array, U: Array):
+        X = unroll(xt, U)
+
+        logdet_Y, logdet_W = compute_entropy_efficient(X[:-1], U)
+
+        horizon = U.shape[0]
+        T = jnp.arange(1, horizon + 1)
+
+        ## normalize by time
+        ol = logdet_Y / (2 * jnp.flip(T) * dt)
+        cl = logdet_W / (2 * jnp.flip(T) * dt)
+
+        ol = ol[0]
+        cl = cl[0]
+        cip = ol - cl
+
+        info = {'cip': cip, 'ol': ol, 'cl': cl}
+
+        if component == 'cip':
+            return cip, info
+        elif component == 'ol':
+            return ol, info
+        elif component == 'cl':
+            return -cl, info
+
     return jax.jit(compute_cip)
 
 

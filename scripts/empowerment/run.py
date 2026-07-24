@@ -45,20 +45,21 @@ params = {
     },
     'DOUBLE_PENDULUM': {
         'horizon': 500,
-        'steps': 1200,
+        'steps': 2000,
         'dt': 0.01,
         'xml_path': 'xml/double_pendulum.xml',
         'render': render_double_pendulum
     },
     'TRIPLE_PENDULUM': {
-        'horizon': 128, #500,
+        'horizon': 512, #128, #500,
         'steps': 2000,
         'dt': 0.01,
         'xml_path': 'xml/triple_pendulum.xml',
         'render': render_triple_pendulum,
         'init': lambda dyn: jnp.zeros(dyn.state_dim).at[0].set(jnp.pi),
         'setup': lambda dyn: dyn.mjx_model.replace(
-            actuator_gear = dyn.mjx_model.actuator_gear.at[:, 0].set(25)
+            actuator_gear = dyn.mjx_model.actuator_gear.at[:, 0].set(25),
+            dof_damping = dyn.mjx_model.dof_damping.at[:].set(3.5)
         )
     },
     'HUMULUM': {
@@ -67,7 +68,11 @@ params = {
         'dt': 0.01,
         'xml_path': 'xml/humulum.xml',
         'render': render_humulum,
-        'init': lambda dyn: jnp.load('hanging.npy')
+        'init': lambda dyn: jnp.load('xml/hanging.npy'),
+        'setup': lambda dyn: dyn.mjx_model.replace(
+            actuator_gear = dyn.mjx_model.actuator_gear.at[:, 0].set(50),
+            dof_damping = dyn.mjx_model.dof_damping.at[:].set(5.0)
+        )
     }
 }
 
@@ -77,8 +82,8 @@ if __name__ == '__main__':
     # task = 'SINGLE_PENDULUM'
     # task = 'CART_POLE'
     # task = 'DOUBLE_PENDULUM'
-    task = 'TRIPLE_PENDULUM'
-    # task = 'HUMULUM'
+    # task = 'TRIPLE_PENDULUM'
+    task = 'HUMULUM'
 
 
     horizon = params[task]['horizon']
