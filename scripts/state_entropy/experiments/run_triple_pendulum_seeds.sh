@@ -9,9 +9,14 @@ set -euo pipefail
 START="${1:-0}"
 END="${2:-9}"
 
+## control penalty weight. Goes into the output dir name (beta=$BETA), so changing it
+## writes to new dirs rather than overwriting previous runs.
+BETA=0.1
+ITER=1
+
 for seed in $(seq "$START" "$END"); do
-    echo "=== state_entropy triple_pendulum seed=${seed} ==="
-    python scripts/state_entropy/experiments/triple_pendulum.py --seed "$seed"
+    echo "=== state_entropy triple_pendulum seed=${seed} beta=${BETA} ==="
+    python scripts/state_entropy/experiments/triple_pendulum.py --seed "$seed" --beta "$BETA" --iterations "$ITER"
 done
 
 echo "Done: triple_pendulum seeds ${START}..${END}"

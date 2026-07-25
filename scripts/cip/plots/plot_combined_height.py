@@ -180,7 +180,7 @@ ENVS = [
         state_entropy = dict(
             results = 'results/STATE_ENTROPY/TRIPLE_PENDULUM',
             run_fmt = 'retest-seed={seed}-{suffix}',
-            suffix  = 'k=12-sub=1-gear=25.0-damp=None-beta=2.5-h=128-shots=2048-iter=10-elite=0.1-smooth=0.1-rho=0.9-dt=0.01-steps=2000',
+            suffix  = 'k=12-sub=1-gear=25-damp=None-beta=2.5-h=128-shots=2048-iter=10-elite=0.1-smooth=0.1-rho=0.9-dt=0.01-steps=2000',
         ),
         baselines  = [
             dict(label='Empowerment', traj_path='results/empowerment/TRIPLE_PENDULUM/h=128-dt=0.01/traj.npy', deterministic=True),
@@ -316,6 +316,8 @@ if __name__ == '__main__':
                 sp = se_dir / se['run_fmt'].format(seed=seed, suffix=se['suffix']) / 'traj.npy'
                 if sp.exists():
                     se_h.append(cfg['heights_fn'](jnp.load(sp), dyn.model, dyn.nq))
+                else:
+                    print(f'  Missing state-entropy run: {sp}')
             if se_h:
                 se_normed = (np.array(se_h) - min_h) / (max_h - min_h)
                 row['State Entropy'] = float(np.mean([last10(s[:xlim_steps]) for s in se_normed]))
