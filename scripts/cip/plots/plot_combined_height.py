@@ -180,10 +180,10 @@ ENVS = [
         state_entropy = dict(
             results = 'results/STATE_ENTROPY/TRIPLE_PENDULUM',
             run_fmt = 'retest-seed={seed}-{suffix}',
-            suffix  = 'k=12-sub=1-gear=25-damp=None-beta=2.5-h=128-shots=2048-iter=10-elite=0.1-smooth=0.1-rho=0.9-dt=0.01-steps=2000',
+            suffix  = 'k=12-sub=1-gear=25-damp=None-beta=0.1-h=128-shots=2048-iter=1-elite=0.1-smooth=0.1-rho=0.9-dt=0.01-steps=2000',
         ),
         baselines  = [
-            dict(label='Empowerment', traj_path='results/empowerment/TRIPLE_PENDULUM/h=128-dt=0.01/traj.npy', deterministic=True),
+            dict(label='Empowerment', traj_path='results/empowerment/TRIPLE_PENDULUM/h=500-dt=0.01/traj.npy', deterministic=True),
             dict(label='DADS',  path='results/DADS/TRIPLE_PENDULUM/best_skill_seeds.npy'),
             dict(label='DIAYN', path='results/DIAYN/TRIPLE_PENDULUM/extremity_height_triple_pendulum_diayn_1.npy'),
             dict(label='SMM',   path='results/SMM/TRIPLE_PENDULUM/extremity_height_triple_pendulum_smm_1.npy'),
@@ -204,7 +204,7 @@ ENVS = [
         state_entropy = dict(
             results = 'results/STATE_ENTROPY/HUMULUM/efficient',
             run_fmt = 'seed={seed}-{suffix}',
-            suffix  = 'k=12-sub=1-gear=None-damp=None-warmstart=10-beta=9.0-h=512-shots=1024-iter=1-elite=0.2-smooth=0.1-rho=0.9-dt=0.01-steps=1200',
+            suffix  = 'k=12-sub=1-gear=None-damp=None-warmstart=10-beta=1.0-h=512-shots=1024-iter=1-elite=0.2-smooth=0.1-rho=0.9-dt=0.01-steps=1200',
         ),
         baselines  = [
             dict(label='Empowerment', traj_path='results/empowerment/HUMULUM/h=500-dt=0.01/traj.npy', deterministic=True),

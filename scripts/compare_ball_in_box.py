@@ -115,7 +115,7 @@ def aggregate(root, template, seeds, bounds, wall_thresh, contact_margin, grid):
 if __name__ == '__main__':
 
     parser = ArgumentParser()
-    parser.add_argument('--restitution', type=float, default=0.0,
+    parser.add_argument('--restitution', type=float, default=0.5,
                         help='Restitution (e) shared by all methods\' runs.')
     parser.add_argument('--component', type=str, default='ol', help='CIP component subdir.')
     parser.add_argument('--k', type=int, default=12, help='State-entropy neighbor count of the runs to load.')
@@ -133,7 +133,7 @@ if __name__ == '__main__':
                         help='Normalized distance-from-center above which a coord counts as "near wall".')
     parser.add_argument('--contact_margin', type=float, default=0.05,
                         help='Normalized band next to a wall used to count contact approaches.')
-    parser.add_argument('--grid', type=int, default=20, help='Grid resolution for coverage.')
+    parser.add_argument('--grid', type=int, default=25, help='Grid resolution for coverage.')
     parser.add_argument('--out', type=str, default=None, help='Optional CSV output path.')
     args = parser.parse_args()
 
