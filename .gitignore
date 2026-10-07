@@ -223,3 +223,8 @@ __marimo__/
 .vscode/
 wandb/
 !xml/hanging.npy
+
+# the runs behind the paper's figures are committed
+!results/paper/
+!results/paper/**
+!results/paper/**/*.npy

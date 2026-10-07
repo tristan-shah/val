@@ -27,8 +27,11 @@ from val.dynamics import split_state
 # Configuration
 # ---------------------------------------------------------------------------
 
+## runs behind the paper's figures (committed); point this at 'results' to plot new runs
+RESULTS = Path('results/paper')
+
 TRAJ_PATH = (
-    Path('results/CIP/HUMULUM')
+    RESULTS / 'CIP/HUMULUM'
     / 'seed=0-beta=9.0-h=512-shots=1024-iter=1-elite=0.2-smooth=0.1-rho=0.9-dt=0.01-steps=1200'
     / 'traj.npy'
 )

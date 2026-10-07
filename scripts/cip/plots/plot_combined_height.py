@@ -1,8 +1,8 @@
 '''
 Figure 4 and Table 1: normalized extremity height over time for CIP and the baselines on the
 four systems, and the mean height over the final 10% of the episode. Reads the CIP, empowerment
-and state-entropy runs from results/ and the learned-baseline height arrays (DADS, DIAYN, SMM,
-ICM) exported from their own implementations. Writes figures/combined_height.{pdf,png} and prints
+and state-entropy runs and the learned-baseline height arrays (DADS, DIAYN, SMM, ICM) from
+results/paper/. Writes figures/combined_height.{pdf,png} and prints
 the table. Run from the repository root.
 '''
 
@@ -14,6 +14,9 @@ from jax import numpy as jnp
 
 from val import Dynamics
 from val.dynamics import split_state
+
+## runs behind the paper's figures (committed); point this at 'results' to plot new runs
+RESULTS = Path('results/paper')
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +129,7 @@ ENVS = [
     dict(
         title      = 'Cart pole',
         xml        = 'xml/cart_pole.xml',
-        results    = 'results/CIP/CART_POLE',
+        results    = f'{RESULTS}/CIP/CART_POLE',
         suffix     = 'beta=0.0-h=400-shots=512-iter=1-elite=0.1-smooth=0.1-rho=0.9-dt=0.01-steps=1200',
         seeds      = list(range(10)),
         run_fmt    = 'seed={seed}-{suffix}',
@@ -136,22 +139,22 @@ ENVS = [
         ## state-entropy runs (table column only; not plotted). Suffix must match the
         ## on-disk STATE_ENTROPY run-dir names (CIP suffix + 'k=..-sub=..' prefix).
         state_entropy = dict(
-            results = 'results/STATE_ENTROPY/CART_POLE',
+            results = f'{RESULTS}/STATE_ENTROPY/CART_POLE',
             run_fmt = 'seed={seed}-{suffix}',
             suffix  = 'k=12-sub=1-beta=0.0-h=400-shots=512-iter=1-elite=0.1-smooth=0.1-rho=0.9-dt=0.01-steps=1200',
         ),
         baselines  = [
-            dict(label='Empowerment', traj_path='results/EMPOWERMENT/CART_POLE/h=300-dt=0.01/traj.npy', deterministic=True),
-            dict(label='DADS',  path='results/DADS/CART_POLE/best_skill_seeds.npy'),
-            dict(label='DIAYN', path='results/DIAYN/CART_POLE/extremity_height_cart_pole_diayn_1.npy'),
-            dict(label='SMM',   path='results/SMM/CART_POLE/extremity_height_cart_pole_smm_1.npy'),
-            dict(label='ICM',   path='results/ICM/CART_POLE/extremity_height_cart_pole_icm_1.npy'),
+            dict(label='Empowerment', traj_path=f'{RESULTS}/EMPOWERMENT/CART_POLE/h=300-dt=0.01/traj.npy', deterministic=True),
+            dict(label='DADS',  path=f'{RESULTS}/DADS/CART_POLE/best_skill_seeds.npy'),
+            dict(label='DIAYN', path=f'{RESULTS}/DIAYN/CART_POLE/extremity_height_cart_pole_diayn_1.npy'),
+            dict(label='SMM',   path=f'{RESULTS}/SMM/CART_POLE/extremity_height_cart_pole_smm_1.npy'),
+            dict(label='ICM',   path=f'{RESULTS}/ICM/CART_POLE/extremity_height_cart_pole_icm_1.npy'),
         ],
     ),
     dict(
         title      = 'Double pendulum',
         xml        = 'xml/double_pendulum.xml',
-        results    = 'results/CIP/DOUBLE_PENDULUM',
+        results    = f'{RESULTS}/CIP/DOUBLE_PENDULUM',
         suffix     = 'beta=0.0-h=512-shots=1024-iter=10-elite=0.1-smooth=0.1-rho=0.9-dt=0.01-steps=2400',
         seeds      = list(range(10)),
         run_fmt    = 'seed={seed}-{suffix}',
@@ -161,22 +164,22 @@ ENVS = [
         max_fn     = double_pendulum_max_tip_height,
         ## state-entropy runs (table column only; not plotted). Verify suffix vs on-disk names.
         state_entropy = dict(
-            results = 'results/STATE_ENTROPY/DOUBLE_PENDULUM',
+            results = f'{RESULTS}/STATE_ENTROPY/DOUBLE_PENDULUM',
             run_fmt = 'seed={seed}-{suffix}',
             suffix  = 'k=12-sub=1-beta=0.0-h=512-shots=1024-iter=10-elite=0.1-smooth=0.1-rho=0.9-dt=0.01-steps=2000',
         ),
         baselines  = [
-            dict(label='Empowerment', traj_path='results/EMPOWERMENT/DOUBLE_PENDULUM/h=500-dt=0.01/traj.npy', deterministic=True),
-            dict(label='DADS',  path='results/DADS/DOUBLE_PENDULUM/best_skill_seeds.npy'),
-            dict(label='DIAYN', path='results/DIAYN/DOUBLE_PENDULUM/extremity_height_double_pendulum_diayn_1.npy'),
-            dict(label='SMM',   path='results/SMM/DOUBLE_PENDULUM/extremity_height_double_pendulum_smm_1.npy'),
-            dict(label='ICM',   path='results/ICM/DOUBLE_PENDULUM/extremity_height_double_pendulum_icm_1.npy'),
+            dict(label='Empowerment', traj_path=f'{RESULTS}/EMPOWERMENT/DOUBLE_PENDULUM/h=500-dt=0.01/traj.npy', deterministic=True),
+            dict(label='DADS',  path=f'{RESULTS}/DADS/DOUBLE_PENDULUM/best_skill_seeds.npy'),
+            dict(label='DIAYN', path=f'{RESULTS}/DIAYN/DOUBLE_PENDULUM/extremity_height_double_pendulum_diayn_1.npy'),
+            dict(label='SMM',   path=f'{RESULTS}/SMM/DOUBLE_PENDULUM/extremity_height_double_pendulum_smm_1.npy'),
+            dict(label='ICM',   path=f'{RESULTS}/ICM/DOUBLE_PENDULUM/extremity_height_double_pendulum_icm_1.npy'),
         ],
     ),
     dict(
         title      = 'Triple pendulum',
         xml        = 'xml/triple_pendulum.xml',
-        results    = 'results/CIP/TRIPLE_PENDULUM',
+        results    = f'{RESULTS}/CIP/TRIPLE_PENDULUM',
         suffix     = 'gear=25.0-beta=2.5-h=128-shots=2048-iter=10-elite=0.1-smooth=0.1-rho=0.9-dt=0.01-steps=2400',
         seeds      = list(range(10)),
         run_fmt    = 'seed={seed}-{suffix}',
@@ -186,22 +189,22 @@ ENVS = [
         max_fn     = triple_pendulum_max_tip_height,
         ## state-entropy runs (table column only; not plotted). Verify suffix vs on-disk names.
         state_entropy = dict(
-            results = 'results/STATE_ENTROPY/TRIPLE_PENDULUM',
+            results = f'{RESULTS}/STATE_ENTROPY/TRIPLE_PENDULUM',
             run_fmt = 'seed={seed}-{suffix}',
             suffix  = 'k=12-sub=1-gear=25.0-beta=0.1-h=128-shots=2048-iter=1-elite=0.1-smooth=0.1-rho=0.9-dt=0.01-steps=2000',
         ),
         baselines  = [
-            dict(label='Empowerment', traj_path='results/EMPOWERMENT/TRIPLE_PENDULUM/h=500-dt=0.01/traj.npy', deterministic=True),
-            dict(label='DADS',  path='results/DADS/TRIPLE_PENDULUM/best_skill_seeds.npy'),
-            dict(label='DIAYN', path='results/DIAYN/TRIPLE_PENDULUM/extremity_height_triple_pendulum_diayn_1.npy'),
-            dict(label='SMM',   path='results/SMM/TRIPLE_PENDULUM/extremity_height_triple_pendulum_smm_1.npy'),
-            dict(label='ICM',   path='results/ICM/TRIPLE_PENDULUM/extremity_height_triple_pendulum_icm_1.npy')
+            dict(label='Empowerment', traj_path=f'{RESULTS}/EMPOWERMENT/TRIPLE_PENDULUM/h=500-dt=0.01/traj.npy', deterministic=True),
+            dict(label='DADS',  path=f'{RESULTS}/DADS/TRIPLE_PENDULUM/best_skill_seeds.npy'),
+            dict(label='DIAYN', path=f'{RESULTS}/DIAYN/TRIPLE_PENDULUM/extremity_height_triple_pendulum_diayn_1.npy'),
+            dict(label='SMM',   path=f'{RESULTS}/SMM/TRIPLE_PENDULUM/extremity_height_triple_pendulum_smm_1.npy'),
+            dict(label='ICM',   path=f'{RESULTS}/ICM/TRIPLE_PENDULUM/extremity_height_triple_pendulum_icm_1.npy')
         ],
     ),
     dict(
         title      = 'Gibbon',
         xml        = 'xml/humulum.xml',
-        results    = 'results/CIP/HUMULUM',
+        results    = f'{RESULTS}/CIP/HUMULUM',
         suffix     = 'beta=9.0-h=512-shots=1024-iter=1-elite=0.2-smooth=0.1-rho=0.9-dt=0.01-steps=1200',
         seeds      = list(range(10)),
         run_fmt    = 'seed={seed}-{suffix}',
@@ -210,16 +213,16 @@ ENVS = [
         max_fn     = gibbon_max_head_height,
         ## state-entropy runs (table column only; not plotted). Verify suffix vs on-disk names.
         state_entropy = dict(
-            results = 'results/STATE_ENTROPY/HUMULUM',
+            results = f'{RESULTS}/STATE_ENTROPY/HUMULUM',
             run_fmt = 'seed={seed}-{suffix}',
             suffix  = 'k=12-sub=1-beta=1.0-h=512-shots=1024-iter=1-elite=0.2-smooth=0.1-rho=0.9-dt=0.01-steps=1200',
         ),
         baselines  = [
-            dict(label='Empowerment', traj_path='results/EMPOWERMENT/HUMULUM/h=500-dt=0.01/traj.npy', deterministic=True),
-            dict(label='DADS',  path='results/DADS/HUMULUM/best_skill_seeds.npy'),
-            dict(label='DIAYN', path='results/DIAYN/HUMULUM/best_skill_seeds_diayn_1.npy'),
-            dict(label='SMM',   path='results/SMM/HUMULUM/best_skill_seeds_smm_1.npy'),
-            dict(label='ICM',   path='results/ICM/HUMULUM/extremity_height_humulum_icm_1.npy')
+            dict(label='Empowerment', traj_path=f'{RESULTS}/EMPOWERMENT/HUMULUM/h=500-dt=0.01/traj.npy', deterministic=True),
+            dict(label='DADS',  path=f'{RESULTS}/DADS/HUMULUM/best_skill_seeds.npy'),
+            dict(label='DIAYN', path=f'{RESULTS}/DIAYN/HUMULUM/best_skill_seeds_diayn_1.npy'),
+            dict(label='SMM',   path=f'{RESULTS}/SMM/HUMULUM/best_skill_seeds_smm_1.npy'),
+            dict(label='ICM',   path=f'{RESULTS}/ICM/HUMULUM/extremity_height_humulum_icm_1.npy')
         ],
     ),
 ]

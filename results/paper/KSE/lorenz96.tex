@@ -1,0 +1,17 @@
+\begin{table}[h]
+  \centering
+  \vspace{4pt}
+  {\small
+  \begin{tabular}{lccccc}
+    \toprule
+    Method & $N = 10$ & $N = 25$ & $N = 50$ & $N = 75$ & $N = 100$ \\
+    \midrule
+    Ours & $1.99 \pm 0.01$ & $6.28 \pm 0.02$ & $12.82 \pm 0.02$ & $19.25 \pm 0.05$ & $25.70 \pm 0.03$ \\
+    QR   & $1.98 \pm 0.01$ & $6.28 \pm 0.02$ & $12.81 \pm 0.02$ & $19.24 \pm 0.05$ & $25.70 \pm 0.03$ \\
+    \bottomrule
+  \end{tabular}
+  }
+  \vspace{8pt}
+  \caption{Sum of positive Lyapunov exponents on Lorenz-96 for increasing state dimension $N$, estimated with our recursion and with QR decomposition (mean $\pm$ std over 4 random seeds).}
+  \label{tab:lorenz96}
+\end{table}

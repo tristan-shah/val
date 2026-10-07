@@ -23,6 +23,8 @@ from matplotlib.patches import Circle
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
+## runs behind the paper's figures (committed); point this at 'results' to plot new runs
+RESULTS     = Path('results/paper')
 RESTITUTION = 0.5
 N_SEEDS     = 50
 SEEDS       = list(range(N_SEEDS))
@@ -30,12 +32,12 @@ BINS        = 25
 BOUNDS      = (-1.0, 1.0, -1.0, 1.0)     # (xmin, xmax, ymin, ymax)
 CMAP        = 'magma'
 
-CIP_ROOT     = Path('results/CIP/BALL_IN_BOX')
+CIP_ROOT     = RESULTS / 'CIP/BALL_IN_BOX'
 CIP_TEMPLATE = (
     'seed={seed}-beta=0.0-e={e}-spawn=True-h=128-shots=256-iter=1-'
     'elite=0.1-smooth=0.1-rho=0.9-dt=0.05-steps=1000'
 )
-RANDOM_ROOT     = Path('results/RANDOM/BALL_IN_BOX')
+RANDOM_ROOT     = RESULTS / 'RANDOM/BALL_IN_BOX'
 RANDOM_TEMPLATE = 'seed={seed}-e={e}-spawn=True-dt=0.05-steps=1000'
 
 ## schematic (left panel): which CIP trajectory to draw the trail from, and which

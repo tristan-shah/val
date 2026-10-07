@@ -16,7 +16,7 @@ Run every command from the repository root. On a headless Linux machine set `MUJ
 
 ## Running
 
-Experiments write to `results/<METHOD>/<ENVIRONMENT>/<run>/` with `traj.npy`, `U.npy`, `hist.npy` and a video. Figures are written to `figures/`. Script defaults are the paper's hyperparameters (Table 3), so a run needs only a seed.
+Experiments write to `results/<METHOD>/<ENVIRONMENT>/<run>/` with `traj.npy`, `U.npy`, `hist.npy` and a video. The runs behind the paper's figures are committed under `results/paper/` in the same layout, so every figure and table can be regenerated without rerunning anything; the plot scripts read from there (change `RESULTS` at the top of a plot script to plot new runs). Figures are written to `figures/`. Script defaults are the paper's hyperparameters (Table 3), so a run needs only a seed.
 
 **CIP (Section 4).** The paper uses seeds 0 to 9.
 
@@ -60,6 +60,7 @@ python scripts/cip/plots/plot_ball_in_box.py            # Figure 6
 ```bash
 python scripts/kse_estimation/plot_lorenz_kse.py        # Figure 3, seconds
 python scripts/kse_estimation/table_lorenz96.py         # Table 2, about an hour
+python scripts/kse_estimation/table_lorenz96.py --table-only --out results/paper/KSE   # Table 2 from the committed cache
 ```
 
 **Project webpage.** `scripts/webpage/` holds the video and freeze-frame scripts that are not part of the paper.
