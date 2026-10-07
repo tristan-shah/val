@@ -12,7 +12,6 @@ Run from the repository root; set MUJOCO_GL=egl for offscreen rendering on a hea
 from argparse import ArgumentParser
 from pathlib import Path
 
-import jax
 from jax import Array
 from jax import numpy as jnp
 import matplotlib
@@ -83,12 +82,13 @@ if __name__ == '__main__':
 
     parser = ArgumentParser(description = __doc__)
     parser.add_argument('--task', type = str, default = 'CART_POLE', choices = list(params))
+    parser.add_argument('--steps', type = int, default = None, help = 'episode length; defaults to the paper setting for the task')
     args = parser.parse_args()
     task = args.task
 
     horizon = params[task]['horizon']
-    P = params[task]['horizon']
-    steps = params[task]['steps']
+    P = params[task]['horizon']       ## total control power equals the horizon (unit power per step)
+    steps = params[task]['steps'] if args.steps is None else args.steps
     dt = params[task]['dt']
 
     name = f'h={horizon}-dt={dt}'

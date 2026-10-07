@@ -26,8 +26,10 @@ set -euo pipefail
 ENV_NAME="${1:?usage: run.sh <cart_pole|double_pendulum|triple_pendulum|humulum> [seed]}"
 SEED="${2:-${SLURM_ARRAY_TASK_ID:-0}}"
 
-source ~/miniforge3/etc/profile.d/conda.sh
-conda activate val
+## activate the conda environment when a conda install is found; otherwise assume the env is already active
+for conda_sh in ~/miniforge3/etc/profile.d/conda.sh ~/miniconda3/etc/profile.d/conda.sh /opt/miniconda3/etc/profile.d/conda.sh; do
+    if [ -f "$conda_sh" ]; then source "$conda_sh" && conda activate val; break; fi
+done
 
 export PYTHONUNBUFFERED=1
 export MUJOCO_GL="${MUJOCO_GL:-egl}"                                  # offscreen rendering on a headless GPU box

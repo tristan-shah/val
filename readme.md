@@ -37,7 +37,7 @@ python scripts/empowerment/run.py --task CART_POLE                # deterministi
 scripts/state_entropy/experiments/run_cart_pole_seeds.sh 0 9      # also run_double_pendulum_seeds.sh, run_triple_pendulum_seeds.sh, run_humulum_seeds.sh
 ```
 
-DADS, DIAYN, SMM and ICM were run with modified copies of their official implementations, pinned as submodules under `baselines/` (see `baselines/README.md`). The plotting script reads their exported height arrays from `results/<BASELINE>/<ENVIRONMENT>/`.
+DADS, DIAYN, SMM and ICM were run with modified copies of their official implementations, pinned as submodules under `baselines/` (see `baselines/README.md`). The plotting script reads their exported height arrays from `results/paper/<BASELINE>/<ENVIRONMENT>/`.
 
 **Figures and tables.**
 

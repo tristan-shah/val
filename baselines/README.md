@@ -12,8 +12,10 @@ They never update on their own; clone with `git clone --recursive` (or run `git 
 Each submodule has its own conda environment (`conda_env_linux.yml` / `conda_env_mac.yml`) and README.
 Every baseline is pre-trained for 2M environment steps with default hyperparameters, reset deterministically
 to the hanging pose. Evaluation picks the skill with the highest mean extremity height and rolls it out from
-the hanging pose for several seeds, producing a `(seeds, steps)` height array that
-`scripts/cip/plots/plot_combined_height.py` reads from `results/<BASELINE>/<ENVIRONMENT>/`.
+the hanging pose for several seeds, producing a `(seeds, steps)` height array. The arrays used in
+the paper are committed under `results/paper/<BASELINE>/<ENVIRONMENT>/`, where
+`scripts/cip/plots/plot_combined_height.py` reads them; to plot your own, copy them there (or into
+`results/<BASELINE>/<ENVIRONMENT>/` and point `RESULTS` in the plot script at `results`).
 
 ## URLB: DIAYN, SMM, ICM
 
@@ -24,9 +26,9 @@ python eval_extremity_height.py models/states/cart_pole/diayn/1/snapshot_2000010
 ```
 
 `eval_extremity_height.py` writes `extremity_height_<domain>_<agent>_1.npy`; copy it to
-`results/<AGENT>/<ENVIRONMENT>/` under the same name (for example `results/DIAYN/CART_POLE/`).
+`results/paper/<AGENT>/<ENVIRONMENT>/` under the same name (for example `results/paper/DIAYN/CART_POLE/`).
 The gibbon DIAYN and SMM curves were produced with `plot_best_skill_seeds.py` on the same snapshots,
-which writes `best_skill_seeds_<agent>_1.npy`; it goes to `results/<AGENT>/HUMULUM/`.
+which writes `best_skill_seeds_<agent>_1.npy`; it goes to `results/paper/<AGENT>/HUMULUM/`.
 
 ## DADS
 
@@ -37,11 +39,11 @@ python unsupervised_skill_learning/eval_cart_pole.py --logdir=logs/cart_pole --f
 ```
 
 Likewise for `double_pendulum`, `triple_pendulum` and `humulum`. The evaluation writes
-`logs/<env>/eval/best_skill_seeds.npy`; copy it to `results/DADS/<ENVIRONMENT>/best_skill_seeds.npy`.
+`logs/<env>/eval/best_skill_seeds.npy`; copy it to `results/paper/DADS/<ENVIRONMENT>/best_skill_seeds.npy`.
 
 ## Notes
 
 - Training checkpoints are not in the repository (about 5 GB). The height arrays used in the paper are the
-  files under `results/<BASELINE>/`.
+  files under `results/paper/<BASELINE>/`.
 - The baseline MuJoCo models match `xml/` apart from added cameras. The triple pendulum baselines use the
   `RK4` integrator declared in their XML, whereas the CIP runs use `implicitfast`.

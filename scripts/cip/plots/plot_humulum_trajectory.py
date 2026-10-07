@@ -20,8 +20,6 @@ import numpy as np
 import mujoco
 from PIL import Image
 
-from val.dynamics import split_state
-
 
 # ---------------------------------------------------------------------------
 # Configuration

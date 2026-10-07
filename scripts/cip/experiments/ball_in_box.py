@@ -64,13 +64,13 @@ if __name__ == '__main__':
     step = dyn.step
     compute_cip = make_compute_cip_from_step(step, dyn.dt, objective)
 
-    def objective(xt, U):
+    def penalized_objective(xt, U):
         J, info = compute_cip(xt, U)
         control_penalty = jnp.mean(jnp.sum(U ** 2, axis = 1))
         info['control_penalty'] = control_penalty
         return J - beta * control_penalty, info
 
-    batch_objective = jax.jit(jax.vmap(objective, in_axes = (None, 0)))
+    batch_objective = jax.jit(jax.vmap(penalized_objective, in_axes = (None, 0)))
 
     ## planner
     mpc = CEM(dyn, batch_objective, shots, horizon, iterations, elite_frac, smoothing, rho)
