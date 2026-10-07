@@ -1,38 +1,48 @@
+'''
+CIP-driven MPC on the gibbon, a planar humanoid hanging by its feet (Section 4). The defaults
+are the paper's hyperparameters (Table 3); one run is one seed.
+
+    python scripts/cip/experiments/humulum.py --seed 0
+
+The run starts from the settled hanging pose stored in xml/hanging.npy. Before the episode the
+planner's sampling distribution is warm-started with a few planning rounds from that pose.
+
+Writes traj.npy, U.npy, hist.npy, cip.png and vid.mp4 to results/CIP/HUMULUM/<run>.
+Run from the repository root; set MUJOCO_GL=egl for offscreen rendering on a headless machine.
+'''
+
 from argparse import ArgumentParser
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-os.environ['MUJOCO_GL'] = 'egl'
-os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 from pathlib import Path
 
 import jax
 from jax import numpy as jnp
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step
 from val.cem import CEM
-from val.cip import make_compute_cip
+from val.cip import OBJECTIVES, RESULTS_FOLDER, make_compute_cip
+
 
 if __name__ == '__main__':
 
-    parser = ArgumentParser()
+    parser = ArgumentParser(description = __doc__)
     parser.add_argument('--seed', type = int, default = 0)
-    parser.add_argument('--component', type = str, default = 'ol')
+    parser.add_argument('--objective', type = str, default = 'cip', choices = OBJECTIVES,
+                        help = "quantity to maximize: the open-loop rate 'cip' (paper), the negated 'closed_loop' rate, or their 'difference'")
     parser.add_argument('--horizon', type = int, default = 512)
     parser.add_argument('--shots', type = int, default = 1024)
-    parser.add_argument('--gear', type = float, default = None)
-    parser.add_argument('--damping', type = float, default = None)
     parser.add_argument('--iterations', type = int, default = 1)
     parser.add_argument('--elite_frac', type = float, default = 0.2)
     parser.add_argument('--steps', type = int, default = 1200)
-    parser.add_argument('--beta', type = float, default = 9.0)
-    parser.add_argument('--warmstart', type = int, default = 10)
+    parser.add_argument('--beta', type = float, default = 9.0, help = 'control penalty weight (eta in Algorithm 1)')
+    parser.add_argument('--warmstart', type = int, default = 10, help = 'planning rounds before the episode starts')
     args = parser.parse_args()
 
     seed = args.seed
     key = jax.random.PRNGKey(seed)
-
-    component = args.component
+    objective = args.objective
 
     dt = 0.01
     horizon = args.horizon
@@ -43,34 +53,15 @@ if __name__ == '__main__':
     smoothing = 0.1
     rho = 0.9
     beta = args.beta
-    warmstart = args.warmstart
 
-    name = f'seed={seed}-gear={args.gear}-damp={args.damping}-warmstart={warmstart}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
-    root = Path(f'results/HUMULUM/efficient/{component}')
-    path = root / name
+    name = f'seed={seed}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={steps}'
+    path = Path('results') / RESULTS_FOLDER[objective] / 'HUMULUM' / name
     path.mkdir(parents = True, exist_ok = True)
 
+    ## dynamics and objective
     dyn = Dynamics('xml/humulum.xml', dt = dt)
-    print(f'State Dim {dyn.state_dim}, Control Dim {dyn.control_dim}')
-
-    if args.gear is not None:
-        ## override default gear strength
-        dyn.mjx_model = dyn.mjx_model.replace(
-            actuator_gear = dyn.mjx_model.actuator_gear.at[:, 0].set(args.gear)
-        )
-
-    if args.damping is not None:
-        dyn.mjx_model = dyn.mjx_model.replace(
-            dof_damping = dyn.mjx_model.dof_damping.at[:].set(args.damping)
-        )
-
-
     step = make_step(dyn)
-
-    '''
-    running experiment
-    '''
-    compute_cip = make_compute_cip(dyn, component)
+    compute_cip = make_compute_cip(dyn, objective)
 
     def objective(xt, U):
         J, info = compute_cip(xt, U)
@@ -80,56 +71,33 @@ if __name__ == '__main__':
 
     batch_objective = jax.jit(jax.vmap(objective, in_axes = (None, 0)))
 
-    ## initialize agent
-    mpc = CEM(
-        dyn,
-        batch_objective,
-        shots,
-        horizon, 
-        iterations, 
-        elite_frac,
-        smoothing,
-        rho)
+    ## planner
+    mpc = CEM(dyn, batch_objective, shots, horizon, iterations, elite_frac, smoothing, rho)
 
-    ## load in hanging pose
+    ## settled hanging pose
     xt = jnp.load('xml/hanging.npy')
 
-    ut = jnp.zeros(dyn.control_dim)
-
-    linearize = jax.jacfwd(step)
-    fx = linearize(xt, ut)
-
-    print(fx.min(), fx.max())
-
-
-
-    ## warmstart
+    ## warm-start the sampling distribution without advancing the state
     for i in range(args.warmstart):
         key, subkey = jax.random.split(key)
-        ut, J, info, U = mpc(xt, subkey, roll = False)
-        print(i, J)
+        _, J, _ = mpc(xt, subkey, roll = False)
+        print(f'warmstart {i:3d}  objective {float(J):.4f}', flush = True)
 
-
-    '''
-    Run MPC
-    '''
     X = jnp.zeros((steps + 1, dyn.state_dim))
     X = X.at[0].set(xt)
-
     hist = jnp.zeros((steps, 3))
     controls = jnp.zeros((steps, dyn.control_dim))
 
     for t in range(steps):
-
         key, subkey = jax.random.split(key)
-        ut, J, info, U = mpc(xt, subkey)
-
+        ut, J, info = mpc(xt, subkey)
         xt = step(xt, ut)
-        print(t, xt, ut, J)
+        print(f'step {t:5d}  objective {float(J):.4f}', flush = True)
 
         controls = controls.at[t].set(ut)
-        X = X.at[t+1].set(xt)
-        hist = hist.at[t].set(jnp.array([info['cip'], info['ol'], info['cl']]))
+        X = X.at[t + 1].set(xt)
+        ## hist columns: (difference, CIP, closed-loop rate), the order used by all existing runs
+        hist = hist.at[t].set(jnp.array([info['difference'], info['cip'], info['closed_loop']]))
 
     jnp.save(path / 'hist.npy', hist)
     jnp.save(path / 'traj.npy', X)
@@ -139,12 +107,12 @@ if __name__ == '__main__':
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('nats / s')
     T = jnp.arange(0, steps)
-    ax.plot(T * dt, hist[:, 0], label = 'CIP')
-    ax.plot(T * dt, hist[:, 1], label = 'OL')
-    ax.plot(T * dt, hist[:, 2], label = 'CL')
+    ax.plot(T * dt, hist[:, 1], label = 'CIP (open-loop rate)')
+    ax.plot(T * dt, hist[:, 2], label = 'Closed-loop rate')
+    ax.plot(T * dt, hist[:, 0], label = 'Difference')
     ax.legend()
     fig.tight_layout()
-    fig.savefig(path / 'metrics.png', dpi = 300)
-    plt.show()
+    fig.savefig(path / 'cip.png', dpi = 300)
+    plt.close(fig)
 
     dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 5, lookat = jnp.array([0.0, 0.0, 0.0]))

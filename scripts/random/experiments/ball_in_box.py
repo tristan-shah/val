@@ -1,14 +1,13 @@
 '''
-Pure uniform-random control baseline for the ball-in-box environment.
+Uniform-random control baseline for the ball-in-box environment (Appendix A.1, Figure 6).
 
-No planner and no objective: at every step the control is drawn uniformly at random from
-the actuator range. Saves the trajectory in the same format as the CIP / state-entropy
-runs so the shared occupancy-heatmap and comparison scripts can read it.
+No planner and no objective: at every step the control is drawn uniformly from the actuator
+range. Saves traj.npy and U.npy in the same format as the CIP run to results/RANDOM/BALL_IN_BOX/<run>.
+
+    python scripts/random/experiments/ball_in_box.py --restitution 0.5 --seed 0
 '''
 
 from argparse import ArgumentParser, BooleanOptionalAction
-import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 from pathlib import Path
 
 import jax
@@ -23,9 +22,11 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--seed', type = int, default = 0)
     parser.add_argument('--steps', type = int, default = 1000)
-    parser.add_argument('--restitution', type = float, default = 0.0)
+    parser.add_argument('--restitution', type = float, default = 0.5, help = 'wall restitution coefficient')
     parser.add_argument('--force_limit', type = float, default = 1.0)
-    parser.add_argument('--random_spawn', action = BooleanOptionalAction, default = True)
+    parser.add_argument('--random_spawn', action = BooleanOptionalAction, default = True,
+                        help = 'start at a uniformly random position (otherwise the center)')
+    parser.add_argument('--render', action = 'store_true', help = 'also write vid.mp4')
     args = parser.parse_args()
 
     seed = args.seed
@@ -65,5 +66,5 @@ if __name__ == '__main__':
     jnp.save(path / 'traj.npy', X)
     jnp.save(path / 'U.npy', U)
 
-    # dyn.render(X, path = path / 'vid.mp4', skip = 1)
-    # print(f'Saved {path}')
+    if args.render:
+        dyn.render(X, path = path / 'vid.mp4', skip = 1)

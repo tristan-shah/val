@@ -1,33 +1,41 @@
+'''
+State-entropy (APT objective) MPC baseline on the gibbon (planar humanoid hanging by its feet), the "APT (MPC)" column of Table 1.
+Same planner as the CIP run; only the objective (and the control penalty) differs. The run
+starts from the settled hanging pose in xml/hanging.npy after a few warm-start planning rounds.
+
+    python scripts/state_entropy/experiments/humulum.py --seed 0
+
+Writes traj.npy, U.npy, hist.npy, entropy.png and vid.mp4 to results/STATE_ENTROPY/HUMULUM/<run>.
+Run from the repository root; set MUJOCO_GL=egl for offscreen rendering on a headless machine.
+'''
+
 from argparse import ArgumentParser
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-os.environ['MUJOCO_GL'] = 'egl'
-os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 from pathlib import Path
 
 import jax
 from jax import numpy as jnp
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step
 from val.cem import CEM
-from entropy_objective import make_compute_state_entropy
+from val.state_entropy import make_compute_state_entropy
+
 
 if __name__ == '__main__':
 
-    parser = ArgumentParser()
+    parser = ArgumentParser(description = __doc__)
     parser.add_argument('--seed', type = int, default = 0)
-    parser.add_argument('--k', type = int, default = 12)
-    parser.add_argument('--subsample', type = int, default = 1)
+    parser.add_argument('--k', type = int, default = 12, help = 'number of nearest neighbors')
+    parser.add_argument('--subsample', type = int, default = 1, help = 'rollout thinning before the neighbor search')
     parser.add_argument('--horizon', type = int, default = 512)
     parser.add_argument('--shots', type = int, default = 1024)
-    parser.add_argument('--gear', type = float, default = None)
-    parser.add_argument('--damping', type = float, default = None)
     parser.add_argument('--iterations', type = int, default = 1)
     parser.add_argument('--elite_frac', type = float, default = 0.2)
     parser.add_argument('--steps', type = int, default = 1200)
-    parser.add_argument('--beta', type = float, default = 9.0)
-    parser.add_argument('--warmstart', type = int, default = 10)
+    parser.add_argument('--beta', type = float, default = 1.0, help = 'control penalty weight')
+    parser.add_argument('--warmstart', type = int, default = 10, help = 'planning rounds before the episode starts')
     args = parser.parse_args()
 
     seed = args.seed
@@ -42,95 +50,50 @@ if __name__ == '__main__':
     smoothing = 0.1
     rho = 0.9
     beta = args.beta
-    warmstart = args.warmstart
-    k = args.k
-    subsample = args.subsample
 
-    name = f'seed={seed}-k={k}-sub={subsample}-gear={args.gear}-damp={args.damping}-warmstart={warmstart}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={args.steps}'
-    root = Path('results/STATE_ENTROPY/HUMULUM/efficient')
-    path = root / name
+    name = f'seed={seed}-k={args.k}-sub={args.subsample}-beta={beta}-h={horizon}-shots={shots}-iter={iterations}-elite={elite_frac}-smooth={smoothing}-rho={rho}-dt={dt}-steps={steps}'
+    path = Path('results/STATE_ENTROPY/HUMULUM') / name
     path.mkdir(parents = True, exist_ok = True)
 
+    ## dynamics and objective
     dyn = Dynamics('xml/humulum.xml', dt = dt)
-    print(f'State Dim {dyn.state_dim}, Control Dim {dyn.control_dim}')
-
-    if args.gear is not None:
-        ## override default gear strength
-        dyn.mjx_model = dyn.mjx_model.replace(
-            actuator_gear = dyn.mjx_model.actuator_gear.at[:, 0].set(args.gear)
-        )
-
-    if args.damping is not None:
-        dyn.mjx_model = dyn.mjx_model.replace(
-            dof_damping = dyn.mjx_model.dof_damping.at[:].set(args.damping)
-        )
-
-
     step = make_step(dyn)
-
-    '''
-    running experiment
-    '''
-    compute_se = make_compute_state_entropy(step, k, subsample)
+    compute_entropy = make_compute_state_entropy(step, args.k, args.subsample)
 
     def objective(xt, U):
-        J, info = compute_se(xt, U)
+        J, info = compute_entropy(xt, U)
         control_penalty = jnp.mean(jnp.sum(U ** 2, axis = 1))
         info['control_penalty'] = control_penalty
         return J - beta * control_penalty, info
 
     batch_objective = jax.jit(jax.vmap(objective, in_axes = (None, 0)))
 
-    ## initialize agent
-    mpc = CEM(
-        dyn,
-        batch_objective,
-        shots,
-        horizon,
-        iterations,
-        elite_frac,
-        smoothing,
-        rho)
+    ## planner
+    mpc = CEM(dyn, batch_objective, shots, horizon, iterations, elite_frac, smoothing, rho)
 
-    ## load in hanging pose
+    ## settled hanging pose
     xt = jnp.load('xml/hanging.npy')
 
-    ut = jnp.zeros(dyn.control_dim)
-
-    linearize = jax.jacfwd(step)
-    fx = linearize(xt, ut)
-
-    print(fx.min(), fx.max())
-
-
-
-    ## warmstart
+    ## warm-start the sampling distribution without advancing the state
     for i in range(args.warmstart):
         key, subkey = jax.random.split(key)
-        ut, J, info, U = mpc(xt, subkey, roll = False)
-        print(i, J)
+        _, J, _ = mpc(xt, subkey, roll = False)
+        print(f'warmstart {i:3d}  objective {float(J):.4f}', flush = True)
 
-
-    '''
-    Run MPC
-    '''
     X = jnp.zeros((steps + 1, dyn.state_dim))
     X = X.at[0].set(xt)
-
-    hist = jnp.zeros((steps, 3))
+    hist = jnp.zeros(steps)
     controls = jnp.zeros((steps, dyn.control_dim))
 
     for t in range(steps):
-
         key, subkey = jax.random.split(key)
-        ut, J, info, U = mpc(xt, subkey)
-
+        ut, J, info = mpc(xt, subkey)
         xt = step(xt, ut)
-        print(t, xt, ut, J)
+        print(f'step {t:5d}  objective {float(J):.4f}', flush = True)
 
         controls = controls.at[t].set(ut)
-        X = X.at[t+1].set(xt)
-        hist = hist.at[t].set(jnp.array([info['cip'], info['ol'], info['cl']]))
+        X = X.at[t + 1].set(xt)
+        hist = hist.at[t].set(info['entropy'])
 
     jnp.save(path / 'hist.npy', hist)
     jnp.save(path / 'traj.npy', X)
@@ -138,12 +101,10 @@ if __name__ == '__main__':
 
     fig, ax = plt.subplots(1, 1)
     ax.set_xlabel('Time (s)')
-    ax.set_ylabel('nats')
-    T = jnp.arange(0, steps)
-    ax.plot(T * dt, hist[:, 0], label = 'State Entropy (nats)')
-    ax.legend()
+    ax.set_ylabel('State entropy (nats)')
+    ax.plot(jnp.arange(0, steps) * dt, hist)
     fig.tight_layout()
-    fig.savefig(path / 'metrics.png', dpi = 300)
-    plt.show()
+    fig.savefig(path / 'entropy.png', dpi = 300)
+    plt.close(fig)
 
     dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 5, lookat = jnp.array([0.0, 0.0, 0.0]))

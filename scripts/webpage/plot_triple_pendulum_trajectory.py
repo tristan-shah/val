@@ -8,8 +8,8 @@ One render → one image, no compositing seams.
 Frames are sampled uniformly in cumulative pose-space arc-length so dynamic
 regions are represented with fine granularity.
 
-Usage (from repo root):
-    conda run -n val python scripts/cip/plots/plot_triple_pendulum_trajectory.py
+Project-webpage figure (not in the paper). Run from the repository root:
+    python scripts/webpage/plot_triple_pendulum_trajectory.py
 """
 
 from pathlib import Path
@@ -26,12 +26,12 @@ from PIL import Image
 # ---------------------------------------------------------------------------
 
 TRAJ_PATH = (
-    Path('results/CIP/TRIPLE_PENDULUM/ol')
-    / 'retest-seed=0-gear=25.0-beta=2.5-h=128-shots=2048-iter=2-elite=0.1-smooth=0.1-rho=0.9-dt=0.01-steps=1200'
+    Path('results/CIP/TRIPLE_PENDULUM')
+    / 'seed=0-gear=25.0-beta=2.5-h=128-shots=2048-iter=2-elite=0.1-smooth=0.1-rho=0.9-dt=0.01-steps=1200'
     / 'traj.npy'
 )
 XML_PATH = 'xml/triple_pendulum_white.xml'
-OUTPUT   = Path('scripts/cip/plots/triple_pendulum_trajectory.pdf')
+OUTPUT   = Path('figures/webpage/triple_pendulum_trajectory.pdf')
 
 N_FRAMES  = 20     # number of poses
 ARC_FRAC  = 0.80   # fraction of arc-length to draw from

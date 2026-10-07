@@ -35,7 +35,7 @@ LABELS = {
     'Discrete QR':      'QR  ',
 }
 
-DEFAULT_OUT = Path(__file__).resolve().parents[2] / 'results' / 'kse_estimation'
+DEFAULT_OUT = Path(__file__).resolve().parents[2] / 'results' / 'KSE'
 
 
 def compute(T: float, seeds: int, dims: list[int]) -> np.ndarray:

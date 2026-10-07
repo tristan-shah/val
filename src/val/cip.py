@@ -1,75 +1,34 @@
+'''
+Controllable Information Production (CIP) over a finite planning horizon.
+
+Given a rollout X of a control sequence U, the open-loop and closed-loop information production
+rates (Section 3.2) are the time-normalized log-determinants of the recursions in Equation (10),
+propagated backwards along the trajectory in their numerically stable inverse form.
+
+Following Definition 3.5, CIP is the open-loop rate. The closed-loop rate and the difference
+between the two are also returned: the difference was the working definition of CIP early in
+the project and is kept so that every quantity stays available for analysis.
+'''
+
 import jax
 from jax import Array
 from jax import numpy as jnp
-import chex
-from einops import einsum
 
 from val import Dynamics, make_step, make_unroll
 
 
-def make_compute_entropy(nq: int):
+def make_compute_entropy(step: callable):
+    '''
+    Returns a jitted function (X, U) -> (logdet_Y, logdet_W) that accumulates, backwards in
+    time, the open-loop (Y) and closed-loop (W) log-determinants of Equation (10). Jacobians
+    are formed inside the scan so only one pair is ever materialized.
+    '''
 
-    def compute_entropy(fx: Array, fu: Array):
-
-        dx = fx.shape[-1]
-        du = fu.shape[-1]
-
-        Q = jnp.eye(dx)
-        R = jnp.eye(du)
-
-        def scan_fn(carry: tuple, inputs: tuple[Array, Array]):
-            ## logdet_Y_t: log det of Y_t 
-            ## logdet_W_t: log det of W_t
-            ## Y_inv_t: inverse of Y_t 
-            ## W_inv_t: inverse of W_t
-            ## V_t: solution to Riccati Equation
-            logdet_Y_t, logdet_W_t, Y_inv_t, W_inv_t, V_t = carry
-            fx_t, fu_t = inputs
-
-            S_inv = jnp.linalg.inv(R + fu_t.T @ V_t @ fu_t)
-            ## optimal feedback gain
-            K_t = - S_inv @ fu_t.T @ V_t @ fx_t
-            ## closed loop entropy
-            D_t = fx_t + fu_t @ K_t
-
-            ## form matrices to invert
-            M_ol = Y_inv_t + fx_t @ fx_t.T
-            M_cl = W_inv_t + D_t @ D_t.T
-
-            ## accumulate logdet
-            logdet_Y_t = logdet_Y_t + jnp.linalg.slogdet(M_ol).logabsdet
-            logdet_W_t = logdet_W_t + jnp.linalg.slogdet(M_cl).logabsdet
-            
-            ## propagate inverses
-            Y_inv_t = Q - fx_t.T @ jnp.linalg.inv(M_ol) @ fx_t
-            W_inv_t = Q - D_t.T @ jnp.linalg.inv(M_cl) @ D_t
-            
-            ## propagate Riccati
-            V_t = Q + fx_t.T @ V_t @ fx_t - fx_t.T @ V_t @ fu_t @ S_inv @ fu_t.T @ V_t @ fx_t
-
-            carry = (logdet_Y_t, logdet_W_t, Y_inv_t, W_inv_t, V_t)
-            return carry, (logdet_Y_t, logdet_W_t)
-
-        logdet_Y_T = jnp.array(0.0)
-        logdet_W_T = jnp.array(0.0)
-        Y_inv_T = Q
-        W_inv_T = Q
-        V_T = Q
-
-        init = (logdet_Y_T, logdet_W_T, Y_inv_T, W_inv_T, V_T)
-        _, (logdet_Y, logdet_W) = jax.lax.scan(scan_fn, init = init, xs = (fx, fu), reverse = True)
-        return logdet_Y, logdet_W
-    
-    return jax.jit(compute_entropy)
-
-
-def make_compute_entropy_efficient(step: callable):
-    
     linearize = jax.jacfwd(step, argnums = (0, 1))
 
     def compute_entropy(X: Array, U: Array):
-        
-        chex.assert_equal_shape([X, U], dims = 0)
+
+        assert X.shape[0] == U.shape[0]
 
         dx = X.shape[-1]
         du = U.shape[-1]
@@ -78,232 +37,91 @@ def make_compute_entropy_efficient(step: callable):
         R = jnp.eye(du)
 
         def scan_fn(carry: tuple, inputs: tuple[Array, Array]):
-            ## logdet_Y_t: log det of Y_t 
-            ## logdet_W_t: log det of W_t
-            ## Y_inv_t: inverse of Y_t 
-            ## W_inv_t: inverse of W_t
-            ## V_t: solution to Riccati Equation
+            ## logdet_Y_t, logdet_W_t: accumulated log det of Y_t and W_t
+            ## Y_inv_t, W_inv_t:       inverses of Y_t and W_t
+            ## V_t:                    solution of the Riccati equation
             logdet_Y_t, logdet_W_t, Y_inv_t, W_inv_t, V_t = carry
             x_t, u_t = inputs
             fx_t, fu_t = linearize(x_t, u_t)
 
             S_inv = jnp.linalg.inv(R + fu_t.T @ V_t @ fu_t)
-            ## optimal feedback gain
+            ## optimal feedback gain and closed-loop dynamics
             K_t = - S_inv @ fu_t.T @ V_t @ fx_t
-            ## closed loop entropy
             D_t = fx_t + fu_t @ K_t
 
-            ## form matrices to invert
+            ## matrices to invert
             M_ol = Y_inv_t + fx_t @ fx_t.T
             M_cl = W_inv_t + D_t @ D_t.T
 
-            ## accumulate logdet
+            ## accumulate log determinants
             logdet_Y_t = logdet_Y_t + jnp.linalg.slogdet(M_ol).logabsdet
             logdet_W_t = logdet_W_t + jnp.linalg.slogdet(M_cl).logabsdet
-            
+
             ## propagate inverses
             Y_inv_t = Q - fx_t.T @ jnp.linalg.inv(M_ol) @ fx_t
             W_inv_t = Q - D_t.T @ jnp.linalg.inv(M_cl) @ D_t
-            
+
             ## propagate Riccati
             V_t = Q + fx_t.T @ V_t @ fx_t - fx_t.T @ V_t @ fu_t @ S_inv @ fu_t.T @ V_t @ fx_t
 
             carry = (logdet_Y_t, logdet_W_t, Y_inv_t, W_inv_t, V_t)
             return carry, (logdet_Y_t, logdet_W_t)
 
-
-        logdet_Y_T = jnp.array(0.0)
-        logdet_W_T = jnp.array(0.0)
-        Y_inv_T = Q
-        W_inv_T = Q
-        V_T = Q
-
-        init = (logdet_Y_T, logdet_W_T, Y_inv_T, W_inv_T, V_T)
+        init = (jnp.array(0.0), jnp.array(0.0), Q, Q, Q)
         _, (logdet_Y, logdet_W) = jax.lax.scan(scan_fn, init = init, xs = (X, U), reverse = True)
         return logdet_Y, logdet_W
 
     return jax.jit(compute_entropy)
 
 
-def make_compute_cip(dyn: Dynamics, component: str = 'ol'):
+OBJECTIVES = ['cip', 'closed_loop', 'difference']
 
-    assert component in ['cip', 'ol', 'cl']
+## results folder for runs of each objective; the paper's runs are the 'cip' objective
+RESULTS_FOLDER = {'cip': 'CIP', 'closed_loop': 'CIP_CLOSED_LOOP', 'difference': 'CIP_DIFFERENCE'}
 
-    step = make_step(dyn)
-    # traj_linerize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
+
+def make_compute_cip_from_step(step: callable, dt: float, objective: str = 'cip'):
+    '''
+    Builds the planning objective from a jax `step` callable and the time step `dt`.
+    Returns a jitted function (xt, U) -> (J, info) with info = {'cip', 'closed_loop', 'difference'}
+    in nats / s and J the quantity to maximize:
+
+        'cip'           the open-loop information production rate (the paper's objective)
+        'closed_loop'   the negated closed-loop rate, i.e. minimize closed-loop production
+        'difference'    open-loop minus closed-loop rate
+    '''
+
+    assert objective in OBJECTIVES
+
     unroll = make_unroll(step)
-    dt = dyn.mjx_model.opt.timestep
-
-
-    ## for memory inneficient calculation
-    # nq = dyn.nq
-    # compute_entropy = make_compute_entropy(nq)
-
-    ## memory efficient calculation
-    compute_entropy_efficient = make_compute_entropy_efficient(step)
+    compute_entropy = make_compute_entropy(step)
 
     def compute_cip(xt: Array, U: Array):
         X = unroll(xt, U)
 
-        ## memory inefficient calculation because it requires materialization of lots of jacobians
-        # fx, fu = traj_linerize(X[:-1], U)
-        # logdet_Y, logdet_W = compute_entropy(fx, fu)
-
-        ## memory efficient calculation
-        logdet_Y, logdet_W = compute_entropy_efficient(X[:-1], U)
+        logdet_Y, logdet_W = compute_entropy(X[:-1], U)
 
         horizon = U.shape[0]
         T = jnp.arange(1, horizon + 1)
 
-        ## normalize by time
-        ol = logdet_Y / (2 * jnp.flip(T) * dt)
-        cl = logdet_W / (2 * jnp.flip(T) * dt)
+        ## normalize by the remaining time at each step and keep the full-horizon value
+        cip = (logdet_Y / (2 * jnp.flip(T) * dt))[0]            ## open-loop rate
+        closed_loop = (logdet_W / (2 * jnp.flip(T) * dt))[0]    ## closed-loop rate
 
-        ol = ol[0]
-        cl = cl[0]
-        cip = ol - cl
+        info = {'cip': cip, 'closed_loop': closed_loop, 'difference': cip - closed_loop}
 
-        info = {'cip': cip, 'ol': ol, 'cl': cl}
-
-        if component == 'cip':
+        if objective == 'cip':
             return cip, info
-        elif component == 'ol':
-            return ol, info
-        elif component == 'cl':
-            return -cl, info
+        elif objective == 'closed_loop':
+            return -closed_loop, info
+        elif objective == 'difference':
+            return cip - closed_loop, info
 
     return jax.jit(compute_cip)
 
 
-def make_compute_cip_from_step(step: callable, dt: float, component: str = 'ol'):
+def make_compute_cip(dyn: Dynamics, objective: str = 'cip'):
     '''
-    Same CIP objective as `make_compute_cip`, but built from a plain jax `step`
-    callable and an explicit `dt` rather than a mujoco `Dynamics`. Lets custom
-    environments (e.g. BallInBox) reuse the entropy machinery unchanged.
-    Returns `(J, info)` with `info = {'cip', 'ol', 'cl'}`, matching `make_compute_cip`.
+    Same as `make_compute_cip_from_step` for a MuJoCo `Dynamics`.
     '''
-
-    assert component in ['cip', 'ol', 'cl']
-
-    unroll = make_unroll(step)
-    compute_entropy_efficient = make_compute_entropy_efficient(step)
-
-    def compute_cip(xt: Array, U: Array):
-        X = unroll(xt, U)
-
-        logdet_Y, logdet_W = compute_entropy_efficient(X[:-1], U)
-
-        horizon = U.shape[0]
-        T = jnp.arange(1, horizon + 1)
-
-        ## normalize by time
-        ol = logdet_Y / (2 * jnp.flip(T) * dt)
-        cl = logdet_W / (2 * jnp.flip(T) * dt)
-
-        ol = ol[0]
-        cl = cl[0]
-        cip = ol - cl
-
-        info = {'cip': cip, 'ol': ol, 'cl': cl}
-
-        if component == 'cip':
-            return cip, info
-        elif component == 'ol':
-            return ol, info
-        elif component == 'cl':
-            return -cl, info
-
-    return jax.jit(compute_cip)
-
-
-@jax.jit
-def compute_feedback(fx: Array, fu: Array):
-
-    dx = fx.shape[-1]
-    du = fu.shape[-1]
-
-    Q = jnp.eye(dx)
-    R = jnp.eye(du)
-
-    def scan_fn(V_t: Array, inputs: tuple[Array, Array]):
-        
-        fx_t, fu_t = inputs
-
-        S_inv = jnp.linalg.inv(R + fu_t.T @ V_t @ fu_t)
-        ## optimal feedback gain
-        K_t = - S_inv @ fu_t.T @ V_t @ fx_t
-        ## propagate Riccati
-        V_t = Q + fx_t.T @ V_t @ fx_t - fx_t.T @ V_t @ fu_t @ S_inv @ fu_t.T @ V_t @ fx_t
-
-        return V_t, K_t
-
-    V_T = Q
-    _, K = jax.lax.scan(scan_fn, init = V_T, xs = (fx, fu), reverse = True)
-    return K
-
-
-@jax.jit
-def compute_entropy_approximation(fx: Array, fu: Array):
-    K = compute_feedback(fx, fu)
-    D = fx + einsum(fu, K, 't x1 u, t u x2 -> t x1 x2')
-
-    ol_matrix = einsum(fx, fx, 't x1 x, t x2 x -> t x1 x2')
-    cl_matrix = einsum(D, D, 't x1 x, t x2 x -> t x1 x2')
-
-    dx = fx.shape[-1]
-    I = jnp.eye(dx)
-
-    ol = jnp.linalg.slogdet(I + ol_matrix).logabsdet
-    cl = jnp.linalg.slogdet(I + cl_matrix).logabsdet
-
-    return ol, cl
-
-
-def make_compute_cip_approximation(dyn: Dynamics):
-
-    step = make_step(dyn)
-    traj_linerize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
-    unroll = make_unroll(step)
-    dt = dyn.mjx_model.opt.timestep
-
-    def compute_cip_approximation(xt: Array, U: Array):
-        X = unroll(xt, U)
-        fx, fu = traj_linerize(X[:-1], U)
-        ol, cl = compute_entropy_approximation(fx, fu)
-        cip = ol - cl
-        return jnp.mean(cip) / (2 * dt)
-    
-    return jax.jit(compute_cip_approximation)
-
-if __name__ == '__main__':
-
-    dt = 0.05
-    horizon = 100
-
-    ## initialize dynamics
-    dyn = Dynamics('xml/pendulum.xml', dt = dt)
-    
-    step = make_step(dyn)
-    linearize = jax.vmap(jax.jacfwd(step, argnums = (0, 1)))
-    unroll = make_unroll(step)
-
-    xt = jnp.zeros(dyn.state_dim)
-    xt = xt.at[0].set(jnp.pi)
-
-    U = jnp.zeros((horizon, dyn.control_dim))
-
-    compute_cip = make_compute_cip(dyn)
-    cip = compute_cip(xt, U)
-
-    import matplotlib.pyplot as plt
-
-    fig, ax = plt.subplots(1, 1)
-    fig.suptitle(f'Single Pendulum x0 = {xt}')
-    ax.plot(cip)
-    # ax.plot(ol, label = 'Open Loop')
-    # ax.plot(cl, label = 'Closed Loop')
-    # ax.plot(Z, label = 'Stable Open Loop', linestyle = 'dashed', color = 'red')
-    # ax.plot(X)
-    ax.legend()
-    # fig.savefig('fixed.png', dpi = 300)
-    plt.show()
+    return make_compute_cip_from_step(make_step(dyn), dyn.mjx_model.opt.timestep, objective)

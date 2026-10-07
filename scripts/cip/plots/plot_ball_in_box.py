@@ -1,16 +1,14 @@
 '''
-Ball-in-box figure for the paper: three panels in a row.
+Figure 6 (Appendix A.1): ball-in-box occupancy, three panels in a row.
 
     left    schematic of the box with the ball and a short fading trail (drawn from a
             real CIP trajectory) to show that the ball is moving around
     middle  position-occupancy heatmap for CIP, pooled over N_SEEDS seeds
     right   position-occupancy heatmap for uniform random control, pooled over N_SEEDS seeds
 
-Both heatmaps share a single colour scale so they are directly comparable. Mirrors the
-histogramming in scripts/cip/plots/heatmaps/ball_in_box_occupancy.py and
-scripts/random/plots/heatmaps/ball_in_box_occupancy.py (25 bins, restitution 0.5).
+Both heatmaps share a single colour scale so they are directly comparable (25 bins,
+restitution 0.5). Writes figures/ball_in_box.{pdf,png}. Run from the repository root.
 
-Example:
     python scripts/cip/plots/plot_ball_in_box.py
 '''
 
@@ -32,7 +30,7 @@ BINS        = 25
 BOUNDS      = (-1.0, 1.0, -1.0, 1.0)     # (xmin, xmax, ymin, ymax)
 CMAP        = 'magma'
 
-CIP_ROOT     = Path('results/BALL_IN_BOX/ol')
+CIP_ROOT     = Path('results/CIP/BALL_IN_BOX')
 CIP_TEMPLATE = (
     'seed={seed}-beta=0.0-e={e}-spawn=True-h=128-shots=256-iter=1-'
     'elite=0.1-smooth=0.1-rho=0.9-dt=0.05-steps=1000'
@@ -177,6 +175,7 @@ if __name__ == '__main__':
     cb.set_ticks([])
     cb.outline.set_linewidth(0.6)
 
-    fig.savefig('ball_in_box.pdf', bbox_inches='tight')
-    fig.savefig('ball_in_box.png', dpi=600, bbox_inches='tight')
-    print('Saved ball_in_box.pdf and ball_in_box.png')
+    Path('figures').mkdir(exist_ok=True)
+    fig.savefig('figures/ball_in_box.pdf', bbox_inches='tight')
+    fig.savefig('figures/ball_in_box.png', dpi=600, bbox_inches='tight')
+    print('Saved figures/ball_in_box.pdf and figures/ball_in_box.png')

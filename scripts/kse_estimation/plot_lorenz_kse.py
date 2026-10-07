@@ -52,7 +52,7 @@ T1 = 1000.0
 DT = 0.005
 X0 = jnp.array([0.01, 0.01, 0.01])
 
-DEFAULT_OUT = Path(__file__).resolve().parents[2] / 'results' / 'kse_estimation'
+DEFAULT_OUT = Path(__file__).resolve().parents[2] / 'results' / 'KSE'
 
 
 def check_no_overwrite(targets, force: bool) -> None:

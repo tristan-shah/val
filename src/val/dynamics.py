@@ -3,23 +3,23 @@ from typing import Optional
 import mujoco
 from mujoco import mjx
 import jax
-## Enable higher precision (critical for second derivatives)
+## enable higher precision (critical for second derivatives)
 jax.config.update('jax_enable_x64', True)
-# jax.config.update('jax_traceback_filtering', 'off')
 from jax import numpy as jnp
 from jax import Array
 import imageio
 
 from val.utils import split_state, get_state
 
+
 class Dynamics:
     '''
-    Static structure that assists with dynamics simulation and rendering.
+    Wraps a MuJoCo model for simulation with MJX and offscreen rendering with MuJoCo.
     '''
     def __init__(
-            self, 
-            path: Optional[str] = None, 
-            string: Optional[str] = None, 
+            self,
+            path: Optional[str] = None,
+            string: Optional[str] = None,
             integrator: str = 'implicitfast',
             dt: float = None):
 
@@ -40,7 +40,7 @@ class Dynamics:
             model.opt.integrator = mujoco.mjtIntegrator.mjINT_RK4
         else:
             raise ValueError(f'Unknown integrator: {integrator}')
-        
+
         if dt is not None:
             model.opt.timestep = dt
 
@@ -56,7 +56,7 @@ class Dynamics:
         self.state_dim = self.nq + self.nv
         self.control_dim = self.mjx_model.nu
 
-        ## jit the jax step function
+        ## jit the jax step function and its jacobian
         self.step = jax.jit(self._step)
         self.linearize = jax.jit(jax.jacfwd(self.step, argnums = (0, 1)))
 
@@ -69,35 +69,34 @@ class Dynamics:
         mjx_data = mjx.make_data(self.mjx_model).replace(qpos = qpos, qvel = qvel, ctrl = ut)
         mjx_data = mjx.step(self.mjx_model, mjx_data)
         return get_state(mjx_data)
-        
+
     def render(
             self,
-            X: Array, 
+            X: Array,
             path: str,
             lookat: Array = jnp.array([0.0, 0.0, 1.0]),
             distance: float = 3.0,
             azimuth: float = 90.0,
             elevation: float = 0.0,
-            skip: int = 1
-            ):
+            skip: int = 1):
+        '''
+        Renders the trajectory X to an mp4 at `path` with a free camera.
+        '''
 
         renderer = mujoco.Renderer(self.model, height = 1080, width = 1920)
 
-        # Create a free camera
         camera = mujoco.MjvCamera()
-        camera.lookat = lookat  # Point the camera is looking at (x, y, z)
-        camera.distance = distance  # Distance from the lookat point
-        camera.azimuth = azimuth  # Horizontal angle (degrees, 0 = looking along +x)
-        camera.elevation = elevation  # Vertical angle (degrees, -90 = straight down)
+        camera.lookat = lookat          ## point the camera is looking at (x, y, z)
+        camera.distance = distance      ## distance from the lookat point
+        camera.azimuth = azimuth        ## horizontal angle (degrees, 0 = looking along +x)
+        camera.elevation = elevation    ## vertical angle (degrees, -90 = straight down)
 
         data = mujoco.MjData(self.model)
         writer = imageio.get_writer(path, fps = 60)
 
         for t in range(0, X.shape[0], skip):
-
             data.qpos, data.qvel = split_state(X[t], self.nq)
             mujoco.mj_forward(self.model, data)
-            
             renderer.update_scene(data, camera = camera)
             writer.append_data(renderer.render())
 
@@ -105,7 +104,12 @@ class Dynamics:
         writer.close()
         return None
 
+
 def make_step(dyn: Dynamics):
+    '''
+    Returns a jitted step function (xt, ut) -> xt_next for the MJX model.
+    Reuses one data template so the step can be traced inside scans and vmaps.
+    '''
 
     model = dyn.mjx_model
     data_template = mjx.make_data(model)
@@ -116,36 +120,25 @@ def make_step(dyn: Dynamics):
         data = data_template.replace(qpos = qpos, qvel = qvel, ctrl = ut)
         data = mjx.step(model, data)
         return get_state(data)
-    
+
     return jax.jit(step)
 
+
 def make_unroll(step: callable):
+    '''
+    Returns a jitted function (x0, U) -> X that rolls the step function out over the
+    control sequence U. X has shape (horizon + 1, state_dim) and includes x0.
+    '''
 
     def unroll(x0: Array, U: Array):
 
         def body_fn(x: Array, u: Array):
             x_next = step(x, u)
             return x_next, x_next
-        
+
         _, X = jax.lax.scan(body_fn, x0, U)
         X = jnp.concatenate([x0[None, :], X], axis = 0)
 
         return X
-    
+
     return jax.jit(unroll)
-
-def make_unroll_policy(step: callable, pi: callable, T: int):
-    
-    def unroll_policy(xt: Array):
-
-        def body_fn(_xt: Array, _):
-            _ut = pi(_xt)
-            _xt = step(_xt, _ut)
-            return _xt, (_xt, _ut)
-        
-        _, (X, U) = jax.lax.scan(body_fn, xt, length = T)
-        X = jnp.concatenate([xt[None, :], X], axis = 0)
-
-        return X, U
-    
-    return jax.jit(unroll_policy)

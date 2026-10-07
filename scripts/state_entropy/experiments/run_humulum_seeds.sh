@@ -1,23 +1,22 @@
 #!/bin/bash
-# Run state-entropy humulum (gibbon) for a range of seeds SEQUENTIALLY (no SLURM; use tmux).
-# Uses the experiment script's DEFAULT parameters (steps=1200, warmstart=10, h=512, shots=1024, ...).
-# Activate your env first, e.g.:  conda activate val
+# Runs the state-entropy humulum baseline (Table 1, "APT (MPC)") sequentially over seeds.
+# Uses the paper's state-entropy setting: control penalty 1.0.
 #
-# Note: humulum.py pins CUDA_VISIBLE_DEVICES=1 internally, so this runs on GPU 1.
+#   scripts/state_entropy/experiments/run_humulum_seeds.sh [START] [END]   # default seeds 0..9
 #
-# Usage: scripts/state_entropy/experiments/run_humulum_seeds.sh [START] [END]   # default 0 9
+# Activate the environment first (conda activate val). Set CUDA_VISIBLE_DEVICES to pick a GPU.
 
 set -euo pipefail
+
 START="${1:-0}"
 END="${2:-9}"
 
-## control penalty weight. Goes into the output dir name (beta=$BETA), so changing it
-## writes to new dirs rather than overwriting previous runs.
-BETA=1.0
+export MUJOCO_GL="${MUJOCO_GL:-egl}"
+export XLA_PYTHON_CLIENT_PREALLOCATE="${XLA_PYTHON_CLIENT_PREALLOCATE:-false}"
 
 for seed in $(seq "$START" "$END"); do
-    echo "=== state_entropy humulum seed=${seed} beta=${BETA} ==="
-    python scripts/state_entropy/experiments/humulum.py --seed "$seed" --beta "$BETA"
+    echo "=== state_entropy humulum seed=${seed} ==="
+    python scripts/state_entropy/experiments/humulum.py --seed "$seed" --beta 1.0
 done
 
 echo "Done: humulum seeds ${START}..${END}"

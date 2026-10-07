@@ -1,5 +1,5 @@
 """
-DADS-style trajectory figure for the humulum (hanging humanoid) environment.
+Figure 1: freeze-frame trajectory of the gibbon (hanging humanoid) self-righting under CIP.
 
 Builds a single MuJoCo scene containing N copies of the robot model, each
 placed at a different x-position and frozen at a selected trajectory pose.
@@ -8,7 +8,7 @@ One render → one image, no compositing seams.
 Frames are sampled uniformly in cumulative pose-space arc-length so the
 dynamic swing-up phase is represented with fine granularity.
 
-Usage (from repo root):
+Writes figures/humulum_trajectory.{pdf,png}. Run from the repository root:
     python scripts/cip/plots/plot_humulum_trajectory.py
 """
 
@@ -28,12 +28,12 @@ from val.dynamics import split_state
 # ---------------------------------------------------------------------------
 
 TRAJ_PATH = (
-    Path('results/CIP/HUMULUM/efficient/ol')
+    Path('results/CIP/HUMULUM')
     / 'seed=0-beta=9.0-h=512-shots=1024-iter=1-elite=0.2-smooth=0.1-rho=0.9-dt=0.01-steps=1200'
     / 'traj.npy'
 )
 XML_PATH = 'xml/humulum.xml'
-OUTPUT   = Path('scripts/cip/plots/humulum_trajectory.pdf')
+OUTPUT   = Path('figures/humulum_trajectory.pdf')
 
 N_FRAMES  = 20     # number of poses
 ARC_FRAC  = 0.80   # fraction of arc-length to draw from
