@@ -2,26 +2,37 @@ import jax
 from jax import Array
 from jax import numpy as jnp
 
-from val import Dynamics
 from val.utils import ar1_noise
 
+
 class CEM:
+    '''
+    Improved Cross-Entropy Method planner (Pinneri et al. 2021) used for MPC.
+
+    `dyn` supplies the actuator ranges: a MuJoCo `Dynamics` through its mjx model, or a
+    custom environment (e.g. `BallInBox`) through plain `low` / `high` arrays.
+    `objective(xt, U_batch) -> (J, info)` scores a batch of control sequences; every entry of
+    `info` is averaged over the elites and returned alongside the chosen action.
+    '''
     def __init__(
-            self, 
-            dyn: Dynamics, 
+            self,
+            dyn,
             objective: callable,
-            shots: int, 
-            horizon: int, 
-            iterations: int, 
+            shots: int,
+            horizon: int,
+            iterations: int,
             elite_frac: float,
             smoothing: float,
             rho: float = 0.9):
-        
+
         assert 0.0 < elite_frac <= 1.0
 
         ## actuator ranges
-        self.low = dyn.mjx_model.actuator_ctrlrange[:, 0]
-        self.high = dyn.mjx_model.actuator_ctrlrange[:, 1]
+        if hasattr(dyn, 'mjx_model'):
+            self.low = dyn.mjx_model.actuator_ctrlrange[:, 0]
+            self.high = dyn.mjx_model.actuator_ctrlrange[:, 1]
+        else:
+            self.low, self.high = dyn.low, dyn.high
 
         ## objective function
         self.objective = objective
@@ -35,37 +46,29 @@ class CEM:
         self.smoothing = smoothing
         self.rho = rho
 
-        ## set a minimum exploration amount
-        self.min_std = 0.05 * (self.high - self.low) ## default
+        ## minimum exploration amount
+        self.min_std = 0.05 * (self.high - self.low)
 
-        ## initial mean and std
+        ## initial sampling distribution
         self.mean = jnp.zeros((self.horizon, self.control_dim))
         self.std = jnp.ones((self.horizon, self.control_dim))
 
-        ## store the elite action sequences
-        self.elites = None
-
-    # def roll(self, key):
     def roll(self):
-
-        ## roll backward
+        '''
+        Shifts the sampling distribution one step forward in time, repeating the last entry.
+        '''
         self.mean = jnp.roll(self.mean, shift = -1, axis = 0)
         self.std = jnp.roll(self.std, shift = -1, axis = 0)
-        # self.elites = jnp.roll(self.elites, shift = -1, axis = 1)
-
-        ## set last element
         self.mean = self.mean.at[-1].set(self.mean[-2])
         self.std = self.std.at[-1].set(self.std[-2])
-
-        # if self.elites is not None:
-        #     ## add a random last action to the shifted elites
-        #     key, subkey = jax.random.split(key)
-        #     random_last = jax.random.uniform(subkey, (self.shots, self.control_dim), minval = self.low, maxval = self.high)
-        #     self.elites = self.elites.at[:, -1, :].set(random_last)
-
         return None
 
     def __call__(self, xt: Array, key, roll: bool = True):
+        '''
+        Plans from state xt. Returns (ut, J_elite, info) where ut is the first action of the
+        best sampled sequence, J_elite the mean elite objective and info the elite-averaged
+        objective diagnostics.
+        '''
 
         for _ in range(self.iterations):
 
@@ -73,44 +76,32 @@ class CEM:
             ## generate correlated noise
             noise = ar1_noise(subkey, self.shots, self.horizon, self.control_dim, self.rho)
 
-            ## generate a batch of random control signals
+            ## sample a batch of control sequences and clip to the actuator range
             U_batch = self.mean[None, :, :] + self.std[None, :, :] * noise
-            ## clip the sampled sequences within the allowable range
             U_batch = U_batch.clip(self.low[None, None, :], self.high[None, None, :])
-            ## evaluate control signals in parallel
+
+            ## evaluate control sequences in parallel
             J, info = self.objective(xt, U_batch)
 
-            ## select top performing control sequences
+            ## select the top performing control sequences
             elite_idx = jnp.argsort(J, descending = True)[:self.n_elite]
             U_elite = U_batch[elite_idx]
-            # ## store elites from previous iteration
-            # self.elites = U_elite
 
-            ## fit gaussian
+            ## fit a gaussian to the elites with a smoothed update
             new_mean = jnp.mean(U_elite, axis = 0)
             new_std = jnp.std(U_elite, axis = 0)
-
-            ## smooth update
             self.mean = (1 - self.smoothing) * new_mean + self.smoothing * self.mean
-            self.std  = (1 - self.smoothing) * new_std  + self.smoothing * self.std
+            self.std = (1 - self.smoothing) * new_std + self.smoothing * self.std
+
             ## maintain minimum exploration
             self.std = self.std.clip(min = self.min_std)
 
-        ## return best action (that was actually tested)
-        best_idx = jnp.argmax(J)
-        U_best = U_batch[best_idx]
-        ut = U_best[0]
+        ## return the first action of the best sequence that was actually evaluated
+        ut = U_batch[jnp.argmax(J)][0]
 
         if roll:
-            ## rolls over mean, std, and elite sequences one step
-            # self.roll(key)
             self.roll()
 
-        info = {
-            'cip': info['cip'][elite_idx].mean(), 
-            'ol': info['ol'][elite_idx].mean(),
-            'cl': info['cl'][elite_idx].mean()
-            }
+        info = {k: v[elite_idx].mean() for k, v in info.items()}
 
-        # return ut, J[elite_idx].mean(), info
-        return ut, J[elite_idx].mean(), info, U_batch[elite_idx]
+        return ut, J[elite_idx].mean(), info

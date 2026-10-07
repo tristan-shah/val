@@ -1,16 +1,25 @@
+'''
+Empowerment baseline (Figure 4, Table 1): at every step the agent applies the bang-bang action
+along the gradient of empowerment, computed exactly under a linear-Gaussian channel approximation
+of the dynamics over the planning horizon. Deterministic, so one run per environment.
+
+    python scripts/empowerment/run.py --task CART_POLE
+
+Writes traj.npy, empowerment.png and vid.mp4 to results/EMPOWERMENT/<TASK>/<run>.
+Run from the repository root; set MUJOCO_GL=egl for offscreen rendering on a headless machine.
+'''
+
+from argparse import ArgumentParser
 from pathlib import Path
 
-import jax
 from jax import Array
 from jax import numpy as jnp
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from val import Dynamics, make_step
 from val.empowerment import compute_empowerment, compute_empowerment_grad
-
-def render_pendulum(dyn: Dynamics, X: Array, path: Path):
-    dyn.render(X, path = path / 'vid.mp4', skip = 1, distance = 4)
-    return None
 
 def render_cart_pole(dyn: Dynamics, X: Array, path: Path):
     dyn.render(X, path = path / 'vid.mp4', skip = 2, distance = 4)
@@ -29,13 +38,6 @@ def render_humulum(dyn: Dynamics, X: Array, path: Path):
     return None
 
 params = {
-    'SINGLE_PENDULUM': {
-        'horizon': 150,
-        'steps': 600,
-        'dt': 0.05,
-        'xml_path': 'xml/pendulum.xml',
-        'render': render_pendulum
-    },
     'CART_POLE': {
         'horizon': 300,
         'steps': 1200,
@@ -45,20 +47,21 @@ params = {
     },
     'DOUBLE_PENDULUM': {
         'horizon': 500,
-        'steps': 1200,
+        'steps': 2000,
         'dt': 0.01,
         'xml_path': 'xml/double_pendulum.xml',
         'render': render_double_pendulum
     },
     'TRIPLE_PENDULUM': {
-        'horizon': 128, #500,
+        'horizon': 512,
         'steps': 2000,
         'dt': 0.01,
         'xml_path': 'xml/triple_pendulum.xml',
         'render': render_triple_pendulum,
         'init': lambda dyn: jnp.zeros(dyn.state_dim).at[0].set(jnp.pi),
         'setup': lambda dyn: dyn.mjx_model.replace(
-            actuator_gear = dyn.mjx_model.actuator_gear.at[:, 0].set(25)
+            actuator_gear = dyn.mjx_model.actuator_gear.at[:, 0].set(25),
+            dof_damping = dyn.mjx_model.dof_damping.at[:].set(3.5)
         )
     },
     'HUMULUM': {
@@ -67,27 +70,29 @@ params = {
         'dt': 0.01,
         'xml_path': 'xml/humulum.xml',
         'render': render_humulum,
-        'init': lambda dyn: jnp.load('hanging.npy')
+        'init': lambda dyn: jnp.load('xml/hanging.npy'),
+        'setup': lambda dyn: dyn.mjx_model.replace(
+            actuator_gear = dyn.mjx_model.actuator_gear.at[:, 0].set(50),
+            dof_damping = dyn.mjx_model.dof_damping.at[:].set(5.0)
+        )
     }
 }
 
 if __name__ == '__main__':
-    key = jax.random.PRNGKey(0)
 
-    # task = 'SINGLE_PENDULUM'
-    # task = 'CART_POLE'
-    # task = 'DOUBLE_PENDULUM'
-    task = 'TRIPLE_PENDULUM'
-    # task = 'HUMULUM'
-
+    parser = ArgumentParser(description = __doc__)
+    parser.add_argument('--task', type = str, default = 'CART_POLE', choices = list(params))
+    parser.add_argument('--steps', type = int, default = None, help = 'episode length; defaults to the paper setting for the task')
+    args = parser.parse_args()
+    task = args.task
 
     horizon = params[task]['horizon']
-    P = params[task]['horizon']
-    steps = params[task]['steps']
+    P = params[task]['horizon']       ## total control power equals the horizon (unit power per step)
+    steps = params[task]['steps'] if args.steps is None else args.steps
     dt = params[task]['dt']
 
     name = f'h={horizon}-dt={dt}'
-    root = Path(f'results/empowerment/{task}')
+    root = Path(f'results/EMPOWERMENT/{task}')
     path = root / name
     path.mkdir(parents = True, exist_ok = True)
 
@@ -126,7 +131,7 @@ if __name__ == '__main__':
 
         e = compute_empowerment(dyn, xt, U, P)
         empowerment_hist.append(e)
-        print(t, xt, ut, e)
+        print(f'step {t:5d}  empowerment {float(e):.4f}', flush = True)
 
         ## propagate dynamics
         xt = step(xt, ut)
@@ -139,7 +144,7 @@ if __name__ == '__main__':
 
     ## plotting the empowerment over time
     fig, ax = plt.subplots(1, 1)
-    fig.suptitle('Single Pendulum Empowerment', fontsize = 14)
+    fig.suptitle(f'{task} empowerment', fontsize = 14)
     ax.set_xlim(0.0, steps * dt)
     ax.tick_params(axis = 'both', labelsize = 12)
     ax.set_xlabel('Time (s)', fontsize = 14)
@@ -148,6 +153,7 @@ if __name__ == '__main__':
     ax.plot(times, empowerment_hist)
     fig.tight_layout()
     fig.savefig(path / 'empowerment.png', dpi = 300)
+    plt.close(fig)
 
     ## render an animation
     params[task]['render'](dyn, X, path)

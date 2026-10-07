@@ -217,3 +217,14 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# project
+.DS_Store
+.vscode/
+wandb/
+!xml/hanging.npy
+
+# the runs behind the paper's figures are committed
+!results/paper/
+!results/paper/**
+!results/paper/**/*.npy

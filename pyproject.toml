@@ -5,6 +5,19 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "val"
 version = "0.0.1"
+description = "Controllable Information Production: intrinsic motivation from information production rates"
+requires-python = ">=3.10"
+dependencies = [
+    "jax",
+    "numpy",
+    "mujoco",
+    "mujoco-mjx",
+    "einops",
+    "matplotlib",
+    "imageio",
+    "imageio-ffmpeg",
+    "Pillow",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
