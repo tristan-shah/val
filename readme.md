@@ -5,6 +5,7 @@ Code for the paper. Controllable Information Production (CIP) is the open-loop i
 ## Setup
 
 ```bash
+git clone --recursive https://github.com/tristan-shah/val.git && cd val
 conda create -n val python=3.10
 conda activate val
 pip install -e .
@@ -36,7 +37,7 @@ python scripts/empowerment/run.py --task CART_POLE                # deterministi
 scripts/state_entropy/experiments/run_cart_pole_seeds.sh 0 9      # also run_double_pendulum_seeds.sh, run_triple_pendulum_seeds.sh, run_humulum_seeds.sh
 ```
 
-DADS, DIAYN, SMM and ICM were run with their official implementations; the plotting script reads their exported height arrays from `results/<BASELINE>/<ENVIRONMENT>/`.
+DADS, DIAYN, SMM and ICM were run with modified copies of their official implementations, pinned as submodules under `baselines/` (see `baselines/README.md`). The plotting script reads their exported height arrays from `results/<BASELINE>/<ENVIRONMENT>/`.
 
 **Figures and tables.**
 

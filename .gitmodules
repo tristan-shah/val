@@ -1,0 +1,6 @@
+[submodule "baselines/dads"]
+	path = baselines/dads
+	url = https://github.com/tristan-shah/dads.git
+[submodule "baselines/url_benchmark"]
+	path = baselines/url_benchmark
+	url = https://github.com/tristan-shah/url_benchmark.git
